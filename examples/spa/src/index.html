@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Pidwatch SPA Demo</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, system-ui, sans-serif;
+      background: #0d0d1a;
+      color: #e0e0e0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    .card {
+      background: #1a1a2e;
+      border: 1px solid #333;
+      border-radius: 12px;
+      padding: 48px;
+      max-width: 480px;
+      text-align: center;
+    }
+    h1 { font-size: 2em; margin-bottom: 12px; }
+    p { color: #888; line-height: 1.6; margin-bottom: 8px; }
+    code { background: #252545; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }
+    .counter {
+      font-size: 3em;
+      font-weight: bold;
+      color: #4a90d9;
+      margin: 24px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Pidwatch Demo</h1>
+    <p>Edit <code>src/index.html</code> and run <code>make dev</code>.</p>
+    <p>The page reloads instantly via devd live-reload.</p>
+    <div class="counter" id="counter">0</div>
+    <p>Seconds since load</p>
+  </div>
+  <script>
+    let s = 0;
+    setInterval(() => document.getElementById('counter').textContent = ++s, 1000);
+  </script>
+</body>
+</html>

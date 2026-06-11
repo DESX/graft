@@ -1,12 +1,6 @@
 # Graft
 
-Grift is a simple library that adds the following features to traditional Makefiles:
-
- 1. Cached Download and unpacking of Zips, tars, and git repositories. We call these "Packages"
- 2. Ability to add a tracked patch file to apply to Packages. Edit un-packed packages file in place, create patch with a single commnand.
- 3. Abilty to add an overly to selectively add/replace files in the downlaoded packages. Auto symlinks overlay files to tracked files.
- 4. Ability to create and manage Pidfiles: a file that is tied to a running process. If the file is deleted, process dies. If the process dies, file is deleted.
- 
+Tiny Make helpers for **fetching dependencies with first-class patching** and for **supervising long-running processes** via pidfiles. One `graft.mk` to include, no other runtime.
 
 ## Why Graft?
 

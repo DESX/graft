@@ -71,7 +71,9 @@ an explicit, reviewable change to one line.
 ```makefile
 # Self-bootstrapping graft, pinned to a specific commit for reproducibility.
 GRAFT_URL ?= https://github.com/DESX/graft.git
-GRAFT_REV ?= 66f28b3b2f8ca0459ac5cd27b8bba185911c2937   # bump deliberately
+# Pinned commit — bump deliberately. (Keep the SHA on its own line: a trailing
+# `# comment` would leave whitespace in the value.)
+GRAFT_REV ?= 65dd2d0dd4fedde5a2cab1f381287ae02ec0eabb
 .cache/graft/graft.mk:
 	@mkdir -p $(dir $@)
 	@git -C $(dir $@) init -q

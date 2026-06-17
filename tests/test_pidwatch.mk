@@ -23,9 +23,14 @@ test: | $b
 	kill -0 $$SVC_PID 2>/dev/null || (echo "ERROR: service not running" && exit 1)
 	@echo "  start: OK"
 
-	@# ── Pidfile has 3 lines (token, watchdog, service) ──
+	@# ── Pidfile has the 7-line extended format ──
+	@#    (token, watchdog PID, service PID, cmd=, stdout=, stderr=, started=)
 	@LINES=$$(wc -l < $(SVC_PIDFILE)); \
-	test "$$LINES" -eq 3 || (echo "ERROR: pidfile should have 3 lines, has $$LINES" && exit 1)
+	test "$$LINES" -eq 7 || (echo "ERROR: pidfile should have 7 lines, has $$LINES" && exit 1)
+	@grep -q '^cmd=' $(SVC_PIDFILE)     || (echo "ERROR: pidfile missing cmd= line"     && exit 1)
+	@grep -q '^stdout=' $(SVC_PIDFILE)  || (echo "ERROR: pidfile missing stdout= line"  && exit 1)
+	@grep -q '^stderr=' $(SVC_PIDFILE)  || (echo "ERROR: pidfile missing stderr= line"  && exit 1)
+	@grep -q '^started=' $(SVC_PIDFILE) || (echo "ERROR: pidfile missing started= line" && exit 1)
 	@echo "  pidfile format: OK"
 
 	@# ── Stop service ──

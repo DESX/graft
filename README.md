@@ -56,6 +56,36 @@ $(foreach d,$(sort $(DIRS)),$(eval $(call MK_DIR,$d)))
 
 3. Run `make` — the dependency is fetched, cached, and extracted automatically.
 
+## Self-bootstrapping (recommended)
+
+Instead of vendoring `graft.mk` and `pidwatch.c` into your repo, let Make fetch
+graft on first use. Add a rule that clones graft if the include is missing, then
+`include` it — `make <anything>` on a fresh checkout pulls graft, then re-reads
+the Makefile with the macros available. No separate bootstrap step.
+
+**Pin a specific commit, not a branch.** `graft.mk` is the contract your build
+depends on; tracking `main` means an upstream change can silently break or alter
+your build between checkouts. A pinned SHA makes builds reproducible and updates
+an explicit, reviewable change to one line.
+
+```makefile
+# Self-bootstrapping graft, pinned to a specific commit for reproducibility.
+GRAFT_URL ?= https://github.com/DESX/graft.git
+GRAFT_REV ?= 66f28b3b2f8ca0459ac5cd27b8bba185911c2937   # bump deliberately
+.cache/graft/graft.mk:
+	@mkdir -p $(dir $@)
+	@git -C $(dir $@) init -q
+	@git -C $(dir $@) fetch -q --depth=1 $(GRAFT_URL) $(GRAFT_REV)
+	@git -C $(dir $@) checkout -q FETCH_HEAD
+include .cache/graft/graft.mk
+```
+
+A shallow `fetch <sha>` + `checkout FETCH_HEAD` is used rather than
+`git clone --depth=1 -b <rev>`, because `-b` only accepts branches and tags — it
+cannot pin an arbitrary commit. (GitHub allows fetching a SHA directly.)
+
+To update graft, change `GRAFT_REV` to the new commit and delete `.cache/graft`.
+
 ## FETCH — dependency fetch & extract
 
 `$(eval $(call FETCH,NAME))` emits rules to download an archive, extract it into `$(NAME_DIR)`, and optionally patch/overlay it. All variables must be set before the call.

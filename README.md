@@ -70,7 +70,7 @@ a tag is reproducible *and* keeps the bootstrap to a single shallow clone:
 
 ```makefile
 GRAFT_URL ?= https://github.com/DESX/graft.git
-GRAFT_REV ?= v1.0.0   # bump deliberately
+GRAFT_REV ?= v1.0.0
 .cache/graft/graft.mk:; @git clone -q --depth=1 -b $(GRAFT_REV) $(GRAFT_URL) $(dir $@)
 include .cache/graft/graft.mk
 ```

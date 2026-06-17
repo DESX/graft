@@ -63,30 +63,26 @@ graft on first use. Add a rule that clones graft if the include is missing, then
 `include` it — `make <anything>` on a fresh checkout pulls graft, then re-reads
 the Makefile with the macros available. No separate bootstrap step.
 
-**Pin a specific commit, not a branch.** `graft.mk` is the contract your build
+**Pin a release tag, not a branch.** `graft.mk` is the contract your build
 depends on; tracking `main` means an upstream change can silently break or alter
-your build between checkouts. A pinned SHA makes builds reproducible and updates
-an explicit, reviewable change to one line.
+your build between checkouts. Graft publishes immutable `vX.Y.Z` tags, so pinning
+a tag is reproducible *and* keeps the bootstrap to a single shallow clone:
 
 ```makefile
-# Self-bootstrapping graft, pinned to a specific commit for reproducibility.
 GRAFT_URL ?= https://github.com/DESX/graft.git
-# Pinned commit — bump deliberately. (Keep the SHA on its own line: a trailing
-# `# comment` would leave whitespace in the value.)
-GRAFT_REV ?= 65dd2d0dd4fedde5a2cab1f381287ae02ec0eabb
-.cache/graft/graft.mk:
-	@mkdir -p $(dir $@)
-	@git -C $(dir $@) init -q
-	@git -C $(dir $@) fetch -q --depth=1 $(GRAFT_URL) $(GRAFT_REV)
-	@git -C $(dir $@) checkout -q FETCH_HEAD
+GRAFT_REV ?= v1.0.0   # bump deliberately
+.cache/graft/graft.mk:; @git clone -q --depth=1 -b $(GRAFT_REV) $(GRAFT_URL) $(dir $@)
 include .cache/graft/graft.mk
 ```
 
-A shallow `fetch <sha>` + `checkout FETCH_HEAD` is used rather than
-`git clone --depth=1 -b <rev>`, because `-b` only accepts branches and tags — it
-cannot pin an arbitrary commit. (GitHub allows fetching a SHA directly.)
+On a fresh checkout, `make <anything>` builds the missing include (a one-shot
+shallow clone of the pinned tag), then re-reads the Makefile with the macros
+available — no separate bootstrap step. To update graft, change `GRAFT_REV` to a
+newer tag and delete `.cache/graft`.
 
-To update graft, change `GRAFT_REV` to the new commit and delete `.cache/graft`.
+(This works because `git clone -b` accepts a tag or branch name. It cannot pin a
+bare commit SHA — if you must pin a non-tag commit, replace the clone with
+`git -C $(dir $@) init -q && git -C $(dir $@) fetch -q --depth=1 $(GRAFT_URL) <sha> && git -C $(dir $@) checkout -q FETCH_HEAD`.)
 
 ## FETCH — dependency fetch & extract
 

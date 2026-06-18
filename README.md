@@ -1,38 +1,56 @@
 # Graft
 
-Tiny Make helpers for **fetching dependencies with first-class patching** and for **supervising long-running processes** via pidfiles. One `graft.mk` to include, no other runtime.
+Graft is a Makefile library: a single `graft.mk` that you `include`. It provides
+macros for fetching, extracting, and patching source dependencies, and for
+supervising long-running processes via pidfiles. It relies only on common tools
+— `make`, `curl`, `git`, `tar`, and a C compiler for the process watchdog.
 
-## Why Graft?
+## Features
 
-Existing dependency managers (vcpkg, Conan, CMake FetchContent) treat patching as an afterthought. When you need to fix a bug in a dependency before upstream accepts your PR, you're stuck maintaining a fork.
+- **Fetch & extract** — download a dependency from a tarball URL, a zip URL, or a
+  git repository and extract it into a directory you choose; archives are cached.
+- **Version-aware caching** — the default cache filename embeds a version token
+  (the git commit, or a hash of the source URL), so bumping the version fetches a
+  fresh archive and re-extracts instead of reusing a stale one.
+- **Patching** — apply a tracked unified diff after extraction, and regenerate it
+  with `make <dep>_patch` after editing the extracted source.
+- **Overlays** — symlink your own files over an extracted dependency, e.g. to
+  replace a header or drop in a config file.
+- **Inter-dependency ordering** — require one dependency to be built before
+  another, e.g. build a tool and then use it to build the next dependency.
+- **Process supervision** — start, stop, and monitor a long-running process
+  through a pidfile maintained by a small watchdog (`pidwatch`), with timeouts
+  and readiness probes.
+- **Self-bootstrapping** — optionally have Make fetch graft itself on first use,
+  pinned to a release tag.
 
-Graft makes patching a core workflow:
+## Conventions
 
-- **Patch files** are tracked in your repo — small, auditable diffs
-- **Overlays** let you replace specific files via symlinks
-- **Patch regeneration** with `make <dep>_patch` after you modify the extracted source
-- **Caching** preserves your patches across rebuilds
+- **The caller sets every meaningful variable.** Each macro reads variables of the
+  form `NAME_FIELD` (install dir, target probe, source URL, git commit, …); graft
+  does not guess them, and a missing required field raises an immediate
+  `$(error)`. So `grep NAME_` in your Makefile lists everything a dependency uses.
+  The two exceptions are the mechanical paths `NAME_TAR` (cache file, default
+  `$(DL)/<name>-<ver>.tar.gz`) and `NAME_TMP` (git scratch dir, default
+  `/tmp/graft_<name>`); set either to override.
+- **Every macro is prefixed `GRAFT_`** — `GRAFT_FETCH`, `GRAFT_DAEMON`,
+  `GRAFT_MK_DIR`, and helpers like `GRAFT_LOWER` — so `grep GRAFT_` shows exactly
+  what comes from graft.
 
-### Compared to alternatives
+## Setup
 
-| Feature | Graft | vcpkg | Conan | FetchContent |
-|---------|-------|-------|-------|--------------|
-| Patching workflow | First-class | Port overlay | Awkward | PATCH_COMMAND |
-| Overlay support | Yes | No | No | No |
-| Patch regeneration | `make X_patch` | Manual | Manual | Manual |
-| Language agnostic | Yes | C/C++ | C/C++ | CMake |
-| Dependencies | make, curl, git | vcpkg | pip, conan | cmake |
+Two variables configure where things go, plus a list of directories to create:
 
-## Design rule
+| Variable | Description |
+|----------|-------------|
+| `b` | Output directory — `pidwatch` and all extracted deps land here |
+| `DL` | Download cache |
+| `DIRS` | Every directory the rules need; feed to `GRAFT_MK_DIR` |
 
-**Graft never invents *semantic* variables.** Every meaningful `NAME_FIELD` — install dir, target probe, source URL, git commit — must be set by the caller, and missing ones trigger an immediate `$(error)`. The only exceptions are two purely mechanical paths: `NAME_TAR` (the cache filename) and `NAME_TMP` (the git scratch dir) default to `$(DL)/<name>-<ver>.tar.gz` and `/tmp/graft_<name>`. The `<ver>` token is the git commit (or a hash of the source URL), so **bumping the version lands in a new cache file and re-extracts** instead of silently reusing the old archive. Set either path explicitly to override.
+Then `include graft.mk` — either vendored into your repo, or self-bootstrapped
+(see [Self-bootstrapping](#self-bootstrapping)).
 
-Every macro graft defines is prefixed `GRAFT_` — `GRAFT_FETCH`, `GRAFT_DAEMON`, `GRAFT_MK_DIR` (plus helpers like `GRAFT_LOWER`) — so `grep GRAFT_` in your Makefile shows exactly what comes from graft.
-
-## Quick Start
-
-1. Copy `graft.mk` and `pidwatch.c` into your project.
-2. Set up your Makefile:
+## Quick start
 
 ```makefile
 b  := build
@@ -40,7 +58,7 @@ DL := .cache
 
 include graft.mk
 
-# Set the install dir, a probe file, and the source. TAR/TMP paths default.
+# Declare the install dir, a probe file, and the source. TAR/TMP paths default.
 FMT_DIR     := $b/fmt
 FMT_TGT     := $(FMT_DIR)/README.md
 FMT_COMMIT  := 10.2.1
@@ -54,39 +72,13 @@ DIRS := $b $(DL) $(FMT_DIR)
 $(foreach d,$(sort $(DIRS)),$(eval $(call GRAFT_MK_DIR,$d)))
 ```
 
-3. Run `make` — the dependency is fetched, cached, and extracted automatically.
+`make` fetches, caches, and extracts the dependency, then builds `my_app`.
 
-## Self-bootstrapping (recommended)
+## GRAFT_FETCH — fetch & extract
 
-Instead of vendoring `graft.mk` and `pidwatch.c` into your repo, let Make fetch
-graft on first use. Add a rule that clones graft if the include is missing, then
-`include` it — `make <anything>` on a fresh checkout pulls graft, then re-reads
-the Makefile with the macros available. No separate bootstrap step.
-
-**Pin a release tag, not a branch.** `graft.mk` is the contract your build
-depends on; tracking `main` means an upstream change can silently break or alter
-your build between checkouts. Graft publishes immutable `vX.Y.Z` tags, so pinning
-a tag is reproducible *and* keeps the bootstrap to a single shallow clone:
-
-```makefile
-GRAFT_URL ?= https://github.com/DESX/graft.git
-GRAFT_REV ?= v1.2.0
-.cache/graft/graft.mk:; @git clone -q --depth=1 -b $(GRAFT_REV) $(GRAFT_URL) $(dir $@)
-include .cache/graft/graft.mk
-```
-
-On a fresh checkout, `make <anything>` builds the missing include (a one-shot
-shallow clone of the pinned tag), then re-reads the Makefile with the macros
-available — no separate bootstrap step. To update graft, change `GRAFT_REV` to a
-newer tag and delete `.cache/graft`.
-
-(This works because `git clone -b` accepts a tag or branch name. It cannot pin a
-bare commit SHA — if you must pin a non-tag commit, replace the clone with
-`git -C $(dir $@) init -q && git -C $(dir $@) fetch -q --depth=1 $(GRAFT_URL) <sha> && git -C $(dir $@) checkout -q FETCH_HEAD`.)
-
-## GRAFT_FETCH — dependency fetch & extract
-
-`$(eval $(call GRAFT_FETCH,NAME))` emits rules to download an archive, extract it into `$(NAME_DIR)`, and optionally patch/overlay it. All variables must be set before the call.
+`$(eval $(call GRAFT_FETCH,NAME))` emits rules to download an archive, extract it
+into `$(NAME_DIR)`, and optionally patch or overlay it. Set the variables before
+the call.
 
 ### Required
 
@@ -122,7 +114,9 @@ bare commit SHA — if you must pin a non-tag commit, replace the clone with
 FMT_PATCH := patches/fmt-fix-bug.patch
 ```
 
-After editing files in `$(FMT_DIR)`, run `make fmt_patch` to regenerate the patch file. Graft re-extracts a clean copy of the archive, diffs against your modified tree, and writes the result to `FMT_PATCH`.
+After editing files in `$(FMT_DIR)`, run `make fmt_patch` to regenerate the patch
+file. Graft re-extracts a clean copy of the archive, diffs against your modified
+tree, and writes the result to `FMT_PATCH`.
 
 ### Overlays
 
@@ -130,7 +124,9 @@ After editing files in `$(FMT_DIR)`, run `make fmt_patch` to regenerate the patc
 FMT_OVERLAY := overlays/fmt/
 ```
 
-Every file under `overlays/fmt/` is symlinked into the matching spot in `$(FMT_DIR)`, preserving directory structure. Useful for header replacement or drop-in config files.
+Every file under `overlays/fmt/` is symlinked into the matching spot in
+`$(FMT_DIR)`, preserving directory structure. Useful for header replacement or
+drop-in config files.
 
 ### Inter-dependency ordering
 
@@ -148,7 +144,9 @@ FMT_EXTRA      = $(CMAKE_TGT)
 
 ## GRAFT_DAEMON — pidfile-managed processes
 
-`$(eval $(call GRAFT_DAEMON,NAME))` emits rules to start, monitor, and stop a long-running process. The pidfile is the contract: it exists if and only if the process is alive. A background watchdog (`pidwatch`) maintains that invariant.
+`$(eval $(call GRAFT_DAEMON,NAME))` emits rules to start, monitor, and stop a
+long-running process. The pidfile is the contract: it exists if and only if the
+process is alive, and a background watchdog (`pidwatch`) maintains that invariant.
 
 ### Required
 
@@ -200,22 +198,43 @@ dev: $(SRV_PIDFILE)
 stop: srv_stop
 ```
 
-## GRAFT_MK_DIR
-
-Helper to emit `mkdir -p` rules in bulk:
+## GRAFT_MK_DIR — bulk `mkdir -p` rules
 
 ```makefile
 DIRS := $b $(DL) $(FMT_DIR)
 $(foreach d,$(sort $(DIRS)),$(eval $(call GRAFT_MK_DIR,$d)))
 ```
 
-## Required setup
+## Self-bootstrapping
 
-| Variable | Description |
-|----------|-------------|
-| `b` | Output directory — `pidwatch` and all extracted deps land here |
-| `DL` | Download cache |
-| `DIRS` | Append every directory the rules need; feed to `GRAFT_MK_DIR` |
+Instead of vendoring `graft.mk` and `pidwatch.c` into your repo, you can let Make
+fetch graft on first use. Add a rule that clones graft if the include is missing,
+then `include` it — on a fresh checkout `make <anything>` clones graft, then
+re-reads the Makefile with the macros available, with no separate setup step.
+
+Pin a release tag rather than a branch: tracking `main` lets an upstream change
+alter your build between checkouts, whereas graft's immutable `vX.Y.Z` tags are
+reproducible and keep the bootstrap to a single shallow clone.
+
+```makefile
+GRAFT_URL ?= https://github.com/DESX/graft.git
+GRAFT_REV ?= v1.2.0
+.cache/graft/graft.mk:; @git clone -q --depth=1 -b $(GRAFT_REV) $(GRAFT_URL) $(dir $@)
+include .cache/graft/graft.mk
+```
+
+To update graft, change `GRAFT_REV` to a newer tag and delete `.cache/graft`.
+
+`git clone -b` accepts a tag or branch name but cannot pin a bare commit SHA. To
+pin a non-tag commit, replace the clone with:
+
+```makefile
+.cache/graft/graft.mk:
+	@mkdir -p $(dir $@)
+	@git -C $(dir $@) init -q
+	@git -C $(dir $@) fetch -q --depth=1 $(GRAFT_URL) <sha>
+	@git -C $(dir $@) checkout -q FETCH_HEAD
+```
 
 ## Testing
 
@@ -223,7 +242,7 @@ $(foreach d,$(sort $(DIRS)),$(eval $(call GRAFT_MK_DIR,$d)))
 cd tests && make
 ```
 
-Individual tests: `cd tests && make test_git_clone`.
+Run an individual test with `cd tests && make test_git_clone`.
 
 ## Requirements
 

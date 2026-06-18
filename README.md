@@ -25,7 +25,7 @@ Graft makes patching a core workflow:
 
 ## Design rule
 
-**Graft never invents variables.** Every `NAME_FIELD` a macro reads must be set by the caller first. That means `grep NAME_` in your Makefile is authoritative — there's no hidden defaulting inside `graft.mk`. Missing required fields trigger an immediate `$(error)`.
+**Graft never invents *semantic* variables.** Every meaningful `NAME_FIELD` — install dir, target probe, source URL, git commit — must be set by the caller, and missing ones trigger an immediate `$(error)`. The only exceptions are two purely mechanical paths: `NAME_TAR` (the cache filename) and `NAME_TMP` (the git scratch dir) default to `$(DL)/<name>.tar.gz` and `/tmp/graft_<name>`. Set either explicitly to override.
 
 ## Quick Start
 
@@ -38,11 +38,9 @@ DL := .cache
 
 include graft.mk
 
-# Declare every variable the macro will read.
+# Set the install dir, a probe file, and the source. TAR/TMP paths default.
 FMT_DIR     := $b/fmt
 FMT_TGT     := $(FMT_DIR)/README.md
-FMT_TAR     := $(DL)/fmt-10.2.1.tar.gz
-FMT_TMP     := /tmp/fmt
 FMT_COMMIT  := 10.2.1
 FMT_GIT_URL := https://github.com/fmtlib/fmt.git
 $(eval $(call FETCH,FMT))
@@ -70,7 +68,7 @@ a tag is reproducible *and* keeps the bootstrap to a single shallow clone:
 
 ```makefile
 GRAFT_URL ?= https://github.com/DESX/graft.git
-GRAFT_REV ?= v1.0.0
+GRAFT_REV ?= v1.1.0
 .cache/graft/graft.mk:; @git clone -q --depth=1 -b $(GRAFT_REV) $(GRAFT_URL) $(dir $@)
 include .cache/graft/graft.mk
 ```
@@ -94,14 +92,15 @@ bare commit SHA — if you must pin a non-tag commit, replace the clone with
 |----------|-------------|
 | `NAME_DIR` | Install directory |
 | `NAME_TGT` | Existence probe (any file inside `NAME_DIR`) |
-| `NAME_TAR` | Cached archive path |
 | One of `NAME_TAR_URL` / `NAME_ZIP_URL` / `NAME_GIT_URL` | Source |
-| `NAME_COMMIT`, `NAME_TMP` | Required when `NAME_GIT_URL` is set |
+| `NAME_COMMIT` | Required when `NAME_GIT_URL` is set |
 
 ### Optional
 
 | Variable | Description |
 |----------|-------------|
+| `NAME_TAR` | Cached archive path (default `$(DL)/<name>.tar.gz`) |
+| `NAME_TMP` | Git clone scratch dir (default `/tmp/graft_<name>`; git only) |
 | `NAME_EXTRA` | Extra prerequisites of the archive target |
 | `NAME_PRE_UNPACK` | Shell hook run inside `NAME_TMP` before archive caching (git only) |
 | `NAME_POST_UNPACK` | Shell hook run after extraction |

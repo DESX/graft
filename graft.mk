@@ -14,13 +14,13 @@
 #   Fetches and extracts a dependency. Reads ($1 = NAME, uppercase):
 #     $1_DIR          install dir                                   [required]
 #     $1_TGT          existence probe path                          [required]
-#     $1_TAR          cached archive path                           [required]
+#     $1_TAR          cached archive path        [default $(DL)/<name>.tar.gz]
 #     One of:
 #       $1_TAR_URL    tarball URL
 #       $1_ZIP_URL    zip URL (extracted with unzip)
 #       $1_GIT_URL    git URL
 #     $1_COMMIT       git tag/branch/sha                         [git only]
-#     $1_TMP          scratch dir for git clone                  [git only]
+#     $1_TMP          scratch dir for git clone   [git only; default /tmp/graft_<name>]
 #     $1_EXTRA        extra prereqs of the archive                 [optional]
 #     $1_PRE_UNPACK   shell hook before the git clone is archived  [optional]
 #     $1_POST_UNPACK  shell hook after extraction                  [optional]
@@ -74,9 +74,12 @@ $(GRAFT_PIDWATCH): $(GRAFT_DIR)pidwatch.c | $b
 
 # ── FETCH ───────────────────────────────────────────────────────────────────
 define FETCH
+$(eval _n := $(call LOWER,$1))
+# Mechanical paths default for convenience; set them before the call to override.
+$(if $($1_TAR),,$(eval $1_TAR := $(DL)/$(_n).tar.gz))
+$(if $($1_GIT_URL),$(if $($1_TMP),,$(eval $1_TMP := /tmp/graft_$(_n))))
 $(call REQUIRE,$1,DIR TGT TAR)
 $(if $($1_GIT_URL),$(call REQUIRE,$1,COMMIT TMP))
-$(eval _n := $(call LOWER,$1))
 
 ifneq ($($1_TAR_URL),)
 $($1_TAR): | $(DL) $($1_EXTRA)

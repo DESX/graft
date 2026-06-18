@@ -9,6 +9,8 @@ supervising long-running processes via pidfiles. It relies only on common tools
 
 - **Fetch & extract** — download a dependency from a tarball URL, a zip URL, or a
   git repository and extract it into a directory you choose; archives are cached.
+- **Fetch a single file** — download one file (a header, a binary, a script) to a
+  path you choose, with the same cached, version-aware behavior as archives.
 - **Version-aware caching** — the default cache filename embeds a version token
   (the git commit, or a hash of the source URL), so bumping the version fetches a
   fresh archive and re-extracts instead of reusing a stale one.
@@ -142,6 +144,47 @@ FMT_EXTRA      = $(CMAKE_TGT)
 # … then $(eval $(call GRAFT_FETCH,FMT))
 ```
 
+## GRAFT_FETCH_FILE — fetch a single file
+
+`$(eval $(call GRAFT_FETCH_FILE,NAME))` downloads one file to `$(NAME_TGT)` — no
+archive, no extraction. The download is cached under a versioned name (a hash of
+the URL), so bumping the URL re-fetches and re-installs instead of reusing the
+stale copy, just like `GRAFT_FETCH`. The install directory is created for you.
+
+### Required
+
+| Variable | Description |
+|----------|-------------|
+| `NAME_TGT` | Install path for the file |
+| `NAME_URL` | Source URL |
+
+### Optional
+
+| Variable | Description |
+|----------|-------------|
+| `NAME_FILE` | Cached download path (default `$(DL)/<name>-<ver>`, where `<ver>` is a hash of the URL) |
+| `NAME_EXTRA` | Extra prerequisites of the download |
+| `NAME_POST_FETCH` | Shell hook run after the file is installed |
+
+### Generated targets
+
+| Target | Description |
+|--------|-------------|
+| `name_tgt` | Phony → `NAME_TGT` |
+
+### Example
+
+```makefile
+# A single-header library, pinned to a tag; chmod via the post-fetch hook.
+STB_TGT        := $b/include/stb_image.h
+STB_URL        := https://raw.githubusercontent.com/nothings/stb/v2.30/stb_image.h
+STB_POST_FETCH  = chmod 0644 $(STB_TGT)
+$(eval $(call GRAFT_FETCH_FILE,STB))
+
+app: main.c $(STB_TGT)
+	cc -o $@ $< -I$b/include
+```
+
 ## GRAFT_DAEMON — pidfile-managed processes
 
 `$(eval $(call GRAFT_DAEMON,NAME))` emits rules to start, monitor, and stop a
@@ -218,7 +261,7 @@ reproducible and keep the bootstrap to a single shallow clone.
 
 ```makefile
 GRAFT_URL ?= https://github.com/DESX/graft.git
-GRAFT_REV ?= v1.2.0
+GRAFT_REV ?= v1.3.0
 .cache/graft/graft.mk:; @git clone -q --depth=1 -b $(GRAFT_REV) $(GRAFT_URL) $(dir $@)
 include .cache/graft/graft.mk
 ```

@@ -29,6 +29,16 @@
 #   Caller must also add $($1_DIR) and $(DL) to DIRS.
 #   Generates: name_tgt (phony → $1_TGT), name_patch (if $1_PATCH set).
 #
+# ─── GRAFT_FETCH_FILE(NAME) ─────────────────────────────────────────────────
+#   Fetches a single file (no archive, no extraction). Reads:
+#     $1_TGT          install path for the file                     [required]
+#     $1_URL          source URL                                    [required]
+#     $1_FILE         cached download path     [default $(DL)/<name>-<ver>]
+#     $1_EXTRA        extra prereqs of the download                 [optional]
+#     $1_POST_FETCH   shell hook after the file is installed        [optional]
+#   Caller must add $(DL) to DIRS; the install dir is created automatically.
+#   Generates: name_tgt (phony → $1_TGT).
+#
 # ─── GRAFT_DAEMON(NAME) ───────────────────────────────────────────────────────────
 #   Supervises a long-running process via a pidfile. Reads:
 #     $1_CMD          command to run                               [required]
@@ -53,9 +63,9 @@ GRAFT_LOWER = $(shell echo '$1' | tr '[:upper:]' '[:lower:]')
 
 # $(call GRAFT_VTOKEN,NAME) — a filename-safe token that changes whenever the pinned
 # source version changes: the git commit (with '/' made safe), or a short hash
-# of the tarball/zip URL. Embedded in the default $1_TAR so a version bump lands
-# in a new cache file (and re-extracts) instead of reusing the stale archive.
-GRAFT_VTOKEN = $(if $($1_GIT_URL),$(subst /,_,$($1_COMMIT)),$(firstword $(shell printf %s '$($1_TAR_URL)$($1_ZIP_URL)' | cksum)))
+# of the tarball/zip/file URL. Embedded in the default cache filename so a version
+# bump lands in a new cache file (and re-fetches) instead of reusing the stale one.
+GRAFT_VTOKEN = $(if $($1_GIT_URL),$(subst /,_,$($1_COMMIT)),$(firstword $(shell printf %s '$($1_TAR_URL)$($1_ZIP_URL)$($1_URL)' | cksum)))
 
 # $(call GRAFT_OVERLAY,SRC,DST) — symlink files from SRC into DST (shell snippet)
 define GRAFT_OVERLAY
@@ -151,6 +161,30 @@ ifneq ($($1_OVERLAY),)
 endif
 	cd $($1_TMP) && diff -ruN ./old ./new > $(abspath $($1_PATCH)) | true
 endif
+endef
+
+# ── GRAFT_FETCH_FILE ──────────────────────────────────────────────────────────────
+define GRAFT_FETCH_FILE
+$(eval _n := $(call GRAFT_LOWER,$1))
+# FILE is the versioned cache path (default); it carries a hash of the URL so a
+# version bump downloads afresh and re-installs instead of reusing the stale one.
+$(if $($1_FILE),,$(eval $1_FILE := $(DL)/$(_n)-$(call GRAFT_VTOKEN,$1)))
+$(call GRAFT_REQUIRE,$1,TGT URL FILE)
+
+$($1_FILE): | $(DL) $($1_EXTRA)
+	curl -L $($1_URL) > $$@
+
+# FILE is a normal prerequisite so a freshly downloaded version re-installs over
+# the existing target. The install dir is created on demand.
+$($1_TGT): $($1_FILE)
+	@mkdir -p $(dir $($1_TGT))
+	cp $($1_FILE) $$@
+ifneq ($($1_POST_FETCH),)
+	$($1_POST_FETCH)
+endif
+
+.PHONY: $(_n)_tgt
+$(_n)_tgt: $($1_TGT)
 endef
 
 # ── GRAFT_DAEMON ──────────────────────────────────────────────────────────────────

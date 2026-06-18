@@ -27,6 +27,8 @@ Graft makes patching a core workflow:
 
 **Graft never invents *semantic* variables.** Every meaningful `NAME_FIELD` — install dir, target probe, source URL, git commit — must be set by the caller, and missing ones trigger an immediate `$(error)`. The only exceptions are two purely mechanical paths: `NAME_TAR` (the cache filename) and `NAME_TMP` (the git scratch dir) default to `$(DL)/<name>-<ver>.tar.gz` and `/tmp/graft_<name>`. The `<ver>` token is the git commit (or a hash of the source URL), so **bumping the version lands in a new cache file and re-extracts** instead of silently reusing the old archive. Set either path explicitly to override.
 
+Every macro graft defines is prefixed `GRAFT_` — `GRAFT_FETCH`, `GRAFT_DAEMON`, `GRAFT_MK_DIR` (plus helpers like `GRAFT_LOWER`) — so `grep GRAFT_` in your Makefile shows exactly what comes from graft.
+
 ## Quick Start
 
 1. Copy `graft.mk` and `pidwatch.c` into your project.
@@ -43,13 +45,13 @@ FMT_DIR     := $b/fmt
 FMT_TGT     := $(FMT_DIR)/README.md
 FMT_COMMIT  := 10.2.1
 FMT_GIT_URL := https://github.com/fmtlib/fmt.git
-$(eval $(call FETCH,FMT))
+$(eval $(call GRAFT_FETCH,FMT))
 
 my_app: main.cpp $(FMT_TGT)
 	g++ -o $@ $< -I$(FMT_DIR)/include
 
 DIRS := $b $(DL) $(FMT_DIR)
-$(foreach d,$(sort $(DIRS)),$(eval $(call MK_DIR,$d)))
+$(foreach d,$(sort $(DIRS)),$(eval $(call GRAFT_MK_DIR,$d)))
 ```
 
 3. Run `make` — the dependency is fetched, cached, and extracted automatically.
@@ -68,7 +70,7 @@ a tag is reproducible *and* keeps the bootstrap to a single shallow clone:
 
 ```makefile
 GRAFT_URL ?= https://github.com/DESX/graft.git
-GRAFT_REV ?= v1.1.1
+GRAFT_REV ?= v1.2.0
 .cache/graft/graft.mk:; @git clone -q --depth=1 -b $(GRAFT_REV) $(GRAFT_URL) $(dir $@)
 include .cache/graft/graft.mk
 ```
@@ -82,9 +84,9 @@ newer tag and delete `.cache/graft`.
 bare commit SHA — if you must pin a non-tag commit, replace the clone with
 `git -C $(dir $@) init -q && git -C $(dir $@) fetch -q --depth=1 $(GRAFT_URL) <sha> && git -C $(dir $@) checkout -q FETCH_HEAD`.)
 
-## FETCH — dependency fetch & extract
+## GRAFT_FETCH — dependency fetch & extract
 
-`$(eval $(call FETCH,NAME))` emits rules to download an archive, extract it into `$(NAME_DIR)`, and optionally patch/overlay it. All variables must be set before the call.
+`$(eval $(call GRAFT_FETCH,NAME))` emits rules to download an archive, extract it into `$(NAME_DIR)`, and optionally patch/overlay it. All variables must be set before the call.
 
 ### Required
 
@@ -137,16 +139,16 @@ CMAKE_DIR     := $b/cmake
 CMAKE_TGT     := $(CMAKE_DIR)/bin/cmake
 CMAKE_TAR     := $(DL)/cmake.tar.gz
 CMAKE_TAR_URL := https://github.com/Kitware/CMake/releases/download/v3.28.0/cmake-3.28.0-linux-x86_64.tar.gz
-$(eval $(call FETCH,CMAKE))
+$(eval $(call GRAFT_FETCH,CMAKE))
 
 FMT_PRE_UNPACK = $(CMAKE_TGT) -S $(FMT_TMP) -B build && $(CMAKE_TGT) --build build
 FMT_EXTRA      = $(CMAKE_TGT)
-# … then $(eval $(call FETCH,FMT))
+# … then $(eval $(call GRAFT_FETCH,FMT))
 ```
 
-## DAEMON — pidfile-managed processes
+## GRAFT_DAEMON — pidfile-managed processes
 
-`$(eval $(call DAEMON,NAME))` emits rules to start, monitor, and stop a long-running process. The pidfile is the contract: it exists if and only if the process is alive. A background watchdog (`pidwatch`) maintains that invariant.
+`$(eval $(call GRAFT_DAEMON,NAME))` emits rules to start, monitor, and stop a long-running process. The pidfile is the contract: it exists if and only if the process is alive. A background watchdog (`pidwatch`) maintains that invariant.
 
 ### Required
 
@@ -184,7 +186,7 @@ DEVD_DIR     := $b/devd
 DEVD_TGT     := $(DEVD_DIR)/devd
 DEVD_TAR     := $(DL)/devd.tgz
 DEVD_TAR_URL := https://github.com/cortesi/devd/releases/download/v0.9/devd-0.9-linux64.tgz
-$(eval $(call FETCH,DEVD))
+$(eval $(call GRAFT_FETCH,DEVD))
 
 SRV_CMD         := $(abspath $(DEVD_TGT)) -l -p 8080 $(abspath $b/site)
 SRV_DEP         := $(DEVD_TGT)
@@ -192,19 +194,19 @@ SRV_PIDFILE     := $b/server.pid
 SRV_TIMEOUT     := 86400
 SRV_READY_CMD   := curl -sf http://localhost:8080/ > /dev/null
 SRV_READY_TRIES := 20
-$(eval $(call DAEMON,SRV))
+$(eval $(call GRAFT_DAEMON,SRV))
 
 dev: $(SRV_PIDFILE)
 stop: srv_stop
 ```
 
-## MK_DIR
+## GRAFT_MK_DIR
 
 Helper to emit `mkdir -p` rules in bulk:
 
 ```makefile
 DIRS := $b $(DL) $(FMT_DIR)
-$(foreach d,$(sort $(DIRS)),$(eval $(call MK_DIR,$d)))
+$(foreach d,$(sort $(DIRS)),$(eval $(call GRAFT_MK_DIR,$d)))
 ```
 
 ## Required setup
@@ -213,7 +215,7 @@ $(foreach d,$(sort $(DIRS)),$(eval $(call MK_DIR,$d)))
 |----------|-------------|
 | `b` | Output directory — `pidwatch` and all extracted deps land here |
 | `DL` | Download cache |
-| `DIRS` | Append every directory the rules need; feed to `MK_DIR` |
+| `DIRS` | Append every directory the rules need; feed to `GRAFT_MK_DIR` |
 
 ## Testing
 

@@ -9,10 +9,10 @@ DEVD_DIR     := $b/devd
 DEVD_TGT     := $(DEVD_DIR)/devd
 DEVD_TAR     := $(DL)/devd-0.9-linux64.tgz
 DEVD_TAR_URL := https://github.com/cortesi/devd/releases/download/v0.9/devd-0.9-linux64.tgz
-$(eval $(call FETCH,DEVD))
+$(eval $(call GRAFT_FETCH,DEVD))
 
 DIRS := $b $(DL) $(DEVD_DIR)
-$(foreach V,$(sort $(DIRS)),$(eval $(call MK_DIR,$V)))
+$(foreach V,$(sort $(DIRS)),$(eval $(call GRAFT_MK_DIR,$V)))
 
 # ── Server: devd watches build/site for changes and live-reloads the browser ──
 SRV_CMD         := $(abspath $(DEVD_TGT)) -l -p $(PORT) $(abspath $b/site)
@@ -21,7 +21,7 @@ SRV_PIDFILE     := $b/server.pid
 SRV_TIMEOUT     := 86400
 SRV_READY_CMD   := curl -sf http://localhost:$(PORT)/ > /dev/null
 SRV_READY_TRIES := 20
-$(eval $(call DAEMON,SRV))
+$(eval $(call GRAFT_DAEMON,SRV))
 
 # ── Browser: pidwatch on native Linux, launch-and-forget on WSL ──
 WSL := $(shell test -f /proc/sys/fs/binfmt_misc/WSLInterop && echo 1)
@@ -36,7 +36,7 @@ BROWSER_PIDFILE     := $b/browser.pid
 BROWSER_TIMEOUT     := 86400
 BROWSER_READY_CMD   := sleep 0.5
 BROWSER_READY_TRIES := 20
-$(eval $(call DAEMON,BROWSER))
+$(eval $(call GRAFT_DAEMON,BROWSER))
 endif
 
 # ── Source ──

@@ -16,7 +16,7 @@ b  := build
 DL := .cache
 
 GRAFT_URL ?= https://github.com/DESX/graft.git
-GRAFT_REV ?= v1.1.1
+GRAFT_REV ?= v1.2.0
 $(DL)/graft/graft.mk:; @git clone -q --depth=1 -b $(GRAFT_REV) $(GRAFT_URL) $(dir $@)
 include $(DL)/graft/graft.mk
 
@@ -27,10 +27,10 @@ MINIZ_DIR     := $b/miniz
 MINIZ_TGT     := $(MINIZ_DIR)/miniz.h
 MINIZ_COMMIT  := 3.0.2
 MINIZ_GIT_URL := https://github.com/richgel999/miniz.git
-$(eval $(call FETCH,MINIZ))
+$(eval $(call GRAFT_FETCH,MINIZ))
 
 DIRS := $b $(DL) $(MINIZ_DIR)
-$(foreach V,$(sort $(DIRS)),$(eval $(call MK_DIR,$V)))
+$(foreach V,$(sort $(DIRS)),$(eval $(call GRAFT_MK_DIR,$V)))
 
 all: $(MINIZ_TGT)
 	@echo "Bootstrapped graft ($(GRAFT_REV)) and fetched miniz into $(MINIZ_DIR)"

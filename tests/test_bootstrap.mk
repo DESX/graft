@@ -14,7 +14,7 @@ include $b/graft/graft.mk
 # Exercise a bootstrapped macro; checked at runtime (on the first parse pass the
 # include is not yet built, so this would be empty — by the time `test` runs,
 # Make has rebuilt the include and re-read this file with the macros defined).
-MACRO_OK := $(call LOWER,ABC)
+MACRO_OK := $(call GRAFT_LOWER,ABC)
 
 .PHONY: test
 test: $b/graft/graft.mk

@@ -4,7 +4,7 @@ DL := .cache_test_pidwatch
 include ../graft.mk
 
 DIRS := $b $(DL)
-$(foreach V,$(sort $(DIRS)),$(eval $(call MK_DIR,$V)))
+$(foreach V,$(sort $(DIRS)),$(eval $(call GRAFT_MK_DIR,$V)))
 
 # Use sleep as a test service
 SVC_CMD         := /bin/sleep 999
@@ -12,7 +12,7 @@ SVC_PIDFILE     := $b/svc.pid
 SVC_TIMEOUT     := 10
 SVC_READY_CMD   := sleep 0.2
 SVC_READY_TRIES := 20
-$(eval $(call DAEMON,SVC))
+$(eval $(call GRAFT_DAEMON,SVC))
 
 .PHONY: test
 test: | $b

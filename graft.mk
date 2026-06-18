@@ -10,7 +10,7 @@
 # `grep NAME_` in a caller Makefile is authoritative for every variable used.
 # Missing required fields trigger an immediate $(error).
 #
-# ─── FETCH(NAME) ────────────────────────────────────────────────────────────
+# ─── GRAFT_FETCH(NAME) ────────────────────────────────────────────────────────────
 #   Fetches and extracts a dependency. Reads ($1 = NAME, uppercase):
 #     $1_DIR          install dir                                   [required]
 #     $1_TGT          existence probe path                          [required]
@@ -29,7 +29,7 @@
 #   Caller must also add $($1_DIR) and $(DL) to DIRS.
 #   Generates: name_tgt (phony → $1_TGT), name_patch (if $1_PATCH set).
 #
-# ─── DAEMON(NAME) ───────────────────────────────────────────────────────────
+# ─── GRAFT_DAEMON(NAME) ───────────────────────────────────────────────────────────
 #   Supervises a long-running process via a pidfile. Reads:
 #     $1_CMD          command to run                               [required]
 #     $1_PIDFILE      pidfile path                                 [required]
@@ -40,35 +40,35 @@
 #   Global flag: RESTART=1 stops all daemons at make startup.
 #   Generates: $1_PIDFILE (file rule), name_stop (phony).
 #
-# ─── MK_DIR(DIR) ────────────────────────────────────────────────────────────
+# ─── GRAFT_MK_DIR(DIR) ────────────────────────────────────────────────────────────
 #   Emits a `mkdir -p` rule. Use with:
-#     $(foreach d,$(DIRS),$(eval $(call MK_DIR,$d)))
+#     $(foreach d,$(DIRS),$(eval $(call GRAFT_MK_DIR,$d)))
 
 GRAFT_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
 
 # ── helpers ─────────────────────────────────────────────────────────────────
 
-# $(call LOWER,STR) — lowercase
-LOWER = $(shell echo '$1' | tr '[:upper:]' '[:lower:]')
+# $(call GRAFT_LOWER,STR) — lowercase
+GRAFT_LOWER = $(shell echo '$1' | tr '[:upper:]' '[:lower:]')
 
-# $(call VTOKEN,NAME) — a filename-safe token that changes whenever the pinned
+# $(call GRAFT_VTOKEN,NAME) — a filename-safe token that changes whenever the pinned
 # source version changes: the git commit (with '/' made safe), or a short hash
 # of the tarball/zip URL. Embedded in the default $1_TAR so a version bump lands
 # in a new cache file (and re-extracts) instead of reusing the stale archive.
-VTOKEN = $(if $($1_GIT_URL),$(subst /,_,$($1_COMMIT)),$(firstword $(shell printf %s '$($1_TAR_URL)$($1_ZIP_URL)' | cksum)))
+GRAFT_VTOKEN = $(if $($1_GIT_URL),$(subst /,_,$($1_COMMIT)),$(firstword $(shell printf %s '$($1_TAR_URL)$($1_ZIP_URL)' | cksum)))
 
-# $(call OVERLAY,SRC,DST) — symlink files from SRC into DST (shell snippet)
-define OVERLAY
+# $(call GRAFT_OVERLAY,SRC,DST) — symlink files from SRC into DST (shell snippet)
+define GRAFT_OVERLAY
 find $1 -type f -printf '%P\n' | while read -r f; do \
 	mkdir -p "$2/$$(dirname "$$f")" && rm -f "$2/$$f" && \
 	ln -rs "$$(realpath "$1/$$f")" "$2/$$f"; \
 done
 endef
 
-# $(call REQUIRE,NAME,FIELD ...) — error if any NAME_FIELD is empty
-REQUIRE = $(foreach f,$2,$(if $($1_$f),,$(error graft: $1_$f must be set)))
+# $(call GRAFT_REQUIRE,NAME,FIELD ...) — error if any NAME_FIELD is empty
+GRAFT_REQUIRE = $(foreach f,$2,$(if $($1_$f),,$(error graft: $1_$f must be set)))
 
-define MK_DIR
+define GRAFT_MK_DIR
 $1:
 	mkdir -p $$@
 endef
@@ -78,17 +78,17 @@ GRAFT_PIDWATCH := $b/pidwatch
 $(GRAFT_PIDWATCH): $(GRAFT_DIR)pidwatch.c | $b
 	@cc -O2 -o $@ $<
 
-# ── FETCH ───────────────────────────────────────────────────────────────────
-define FETCH
-$(eval _n := $(call LOWER,$1))
+# ── GRAFT_FETCH ───────────────────────────────────────────────────────────────────
+define GRAFT_FETCH
+$(eval _n := $(call GRAFT_LOWER,$1))
 # Mechanical paths default for convenience; set them before the call to override.
 # TAR carries a version token (git commit or a hash of the source URL) so a
 # version bump fetches a fresh archive and re-extracts instead of silently
 # reusing the stale cached one. TMP is scratch space for the git clone.
 $(if $($1_GIT_URL),$(if $($1_TMP),,$(eval $1_TMP := /tmp/graft_$(_n))))
-$(if $($1_TAR),,$(eval $1_TAR := $(DL)/$(_n)-$(call VTOKEN,$1).tar.gz))
-$(call REQUIRE,$1,DIR TGT TAR)
-$(if $($1_GIT_URL),$(call REQUIRE,$1,COMMIT TMP))
+$(if $($1_TAR),,$(eval $1_TAR := $(DL)/$(_n)-$(call GRAFT_VTOKEN,$1).tar.gz))
+$(call GRAFT_REQUIRE,$1,DIR TGT TAR)
+$(if $($1_GIT_URL),$(call GRAFT_REQUIRE,$1,COMMIT TMP))
 
 ifneq ($($1_TAR_URL),)
 $($1_TAR): | $(DL) $($1_EXTRA)
@@ -129,7 +129,7 @@ ifneq ($($1_PATCH),)
 	patch -p2 -d $($1_DIR) < $($1_PATCH)
 endif
 ifneq ($($1_OVERLAY),)
-	$$(call OVERLAY,$($1_OVERLAY),$($1_DIR))
+	$$(call GRAFT_OVERLAY,$($1_OVERLAY),$($1_DIR))
 endif
 
 .PHONY: $(_n)_tgt
@@ -146,21 +146,21 @@ $(_n)_patch: | $($1_TGT) $($1_PATCH)
 		[ ! -e "$($1_TMP)/old/$$$$rel" ] && rm -rf "$$$$item" || :; \
 	done
 ifneq ($($1_OVERLAY),)
-	$$(call OVERLAY,$($1_OVERLAY),$($1_TMP)/old)
-	$$(call OVERLAY,$($1_OVERLAY),$($1_TMP)/new)
+	$$(call GRAFT_OVERLAY,$($1_OVERLAY),$($1_TMP)/old)
+	$$(call GRAFT_OVERLAY,$($1_OVERLAY),$($1_TMP)/new)
 endif
 	cd $($1_TMP) && diff -ruN ./old ./new > $(abspath $($1_PATCH)) | true
 endif
 endef
 
-# ── DAEMON ──────────────────────────────────────────────────────────────────
+# ── GRAFT_DAEMON ──────────────────────────────────────────────────────────────────
 # Optional: $1_STDOUT and $1_STDERR — if set, pidwatch redirects the
 # daemon's stdout/stderr to those file paths (append mode) instead of
 # /dev/null. The paths are also written into the pidfile so
 # `pidwatch status` can show where the logs are.
-define DAEMON
-$(call REQUIRE,$1,CMD PIDFILE TIMEOUT READY_CMD READY_TRIES)
-$(eval _n := $(call LOWER,$1))
+define GRAFT_DAEMON
+$(call GRAFT_REQUIRE,$1,CMD PIDFILE TIMEOUT READY_CMD READY_TRIES)
+$(eval _n := $(call GRAFT_LOWER,$1))
 
 .PHONY: $(_n)_stop $(_n)_status
 $(_n)_stop: $(GRAFT_PIDWATCH)

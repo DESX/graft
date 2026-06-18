@@ -9,10 +9,10 @@ JQ_DIR     := $b/jq
 JQ_TGT     := $(JQ_DIR)/README.md
 JQ_TAR     := $(DL)/jq-1.7.1.tar.gz
 JQ_TAR_URL := https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-1.7.1.tar.gz
-$(eval $(call FETCH,JQ))
+$(eval $(call GRAFT_FETCH,JQ))
 
 DIRS := $b $(DL) $(JQ_DIR)
-$(foreach V,$(sort $(DIRS)),$(eval $(call MK_DIR,$V)))
+$(foreach V,$(sort $(DIRS)),$(eval $(call GRAFT_MK_DIR,$V)))
 
 .PHONY: test
 test: $(JQ_TGT)

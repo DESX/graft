@@ -16,10 +16,10 @@ MINIZ_DIR     := $b/miniz
 MINIZ_TGT     := $(MINIZ_DIR)/miniz.h
 MINIZ_COMMIT  := $(MINIZ_VER)
 MINIZ_GIT_URL := https://github.com/richgel999/miniz.git
-$(eval $(call FETCH,MINIZ))
+$(eval $(call GRAFT_FETCH,MINIZ))
 
 DIRS := $b $(DL) $(MINIZ_DIR)
-$(foreach V,$(sort $(DIRS)),$(eval $(call MK_DIR,$V)))
+$(foreach V,$(sort $(DIRS)),$(eval $(call GRAFT_MK_DIR,$V)))
 
 .PHONY: test
 test: | $b

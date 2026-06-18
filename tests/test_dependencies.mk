@@ -13,7 +13,7 @@ MINIZ_TMP     := /tmp/graft_test_deps_miniz
 MINIZ_COMMIT  := 3.0.2
 MINIZ_GIT_URL := https://github.com/richgel999/miniz.git
 MINIZ_POST_UNPACK = echo "MINIZ" >> $(abspath $(LOG))
-$(eval $(call FETCH,MINIZ))
+$(eval $(call GRAFT_FETCH,MINIZ))
 
 # Second dependency depends on first via EXTRA
 TINYEXPR_DIR     := $b/tinyexpr
@@ -24,10 +24,10 @@ TINYEXPR_COMMIT  := master
 TINYEXPR_GIT_URL := https://github.com/codeplea/tinyexpr.git
 TINYEXPR_POST_UNPACK = echo "TINYEXPR" >> $(abspath $(LOG))
 TINYEXPR_EXTRA   := $(MINIZ_TGT)
-$(eval $(call FETCH,TINYEXPR))
+$(eval $(call GRAFT_FETCH,TINYEXPR))
 
 DIRS := $b $(DL) $(MINIZ_DIR) $(TINYEXPR_DIR)
-$(foreach V,$(sort $(DIRS)),$(eval $(call MK_DIR,$V)))
+$(foreach V,$(sort $(DIRS)),$(eval $(call GRAFT_MK_DIR,$V)))
 
 .PHONY: test
 test: | $(b)

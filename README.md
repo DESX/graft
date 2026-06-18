@@ -25,7 +25,7 @@ Graft makes patching a core workflow:
 
 ## Design rule
 
-**Graft never invents *semantic* variables.** Every meaningful `NAME_FIELD` — install dir, target probe, source URL, git commit — must be set by the caller, and missing ones trigger an immediate `$(error)`. The only exceptions are two purely mechanical paths: `NAME_TAR` (the cache filename) and `NAME_TMP` (the git scratch dir) default to `$(DL)/<name>.tar.gz` and `/tmp/graft_<name>`. Set either explicitly to override.
+**Graft never invents *semantic* variables.** Every meaningful `NAME_FIELD` — install dir, target probe, source URL, git commit — must be set by the caller, and missing ones trigger an immediate `$(error)`. The only exceptions are two purely mechanical paths: `NAME_TAR` (the cache filename) and `NAME_TMP` (the git scratch dir) default to `$(DL)/<name>-<ver>.tar.gz` and `/tmp/graft_<name>`. The `<ver>` token is the git commit (or a hash of the source URL), so **bumping the version lands in a new cache file and re-extracts** instead of silently reusing the old archive. Set either path explicitly to override.
 
 ## Quick Start
 
@@ -68,7 +68,7 @@ a tag is reproducible *and* keeps the bootstrap to a single shallow clone:
 
 ```makefile
 GRAFT_URL ?= https://github.com/DESX/graft.git
-GRAFT_REV ?= v1.1.0
+GRAFT_REV ?= v1.1.1
 .cache/graft/graft.mk:; @git clone -q --depth=1 -b $(GRAFT_REV) $(GRAFT_URL) $(dir $@)
 include .cache/graft/graft.mk
 ```
@@ -99,7 +99,7 @@ bare commit SHA — if you must pin a non-tag commit, replace the clone with
 
 | Variable | Description |
 |----------|-------------|
-| `NAME_TAR` | Cached archive path (default `$(DL)/<name>.tar.gz`) |
+| `NAME_TAR` | Cached archive path (default `$(DL)/<name>-<ver>.tar.gz`, where `<ver>` is the commit or a URL hash — so a version bump re-fetches) |
 | `NAME_TMP` | Git clone scratch dir (default `/tmp/graft_<name>`; git only) |
 | `NAME_EXTRA` | Extra prerequisites of the archive target |
 | `NAME_PRE_UNPACK` | Shell hook run inside `NAME_TMP` before archive caching (git only) |

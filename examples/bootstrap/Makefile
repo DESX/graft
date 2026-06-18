@@ -16,15 +16,15 @@ b  := build
 DL := .cache
 
 GRAFT_URL ?= https://github.com/DESX/graft.git
-GRAFT_REV ?= v1.0.0
+GRAFT_REV ?= v1.1.1
 $(DL)/graft/graft.mk:; @git clone -q --depth=1 -b $(GRAFT_REV) $(GRAFT_URL) $(dir $@)
 include $(DL)/graft/graft.mk
 
 # A small header-only dependency, fetched via graft to prove bootstrap worked.
+# TAR and TMP are left to graft's defaults ($(DL)/miniz-3.0.2.tar.gz and
+# /tmp/graft_miniz) — bumping MINIZ_COMMIT alone re-fetches the new version.
 MINIZ_DIR     := $b/miniz
 MINIZ_TGT     := $(MINIZ_DIR)/miniz.h
-MINIZ_TAR     := $(DL)/miniz-3.0.2.tar.gz
-MINIZ_TMP     := /tmp/graft_example_miniz
 MINIZ_COMMIT  := 3.0.2
 MINIZ_GIT_URL := https://github.com/richgel999/miniz.git
 $(eval $(call FETCH,MINIZ))

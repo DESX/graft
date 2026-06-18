@@ -14,7 +14,7 @@
 #   Fetches and extracts a dependency. Reads ($1 = NAME, uppercase):
 #     $1_DIR          install dir                                   [required]
 #     $1_TGT          existence probe path                          [required]
-#     $1_TAR          cached archive path        [default $(DL)/<name>.tar.gz]
+#     $1_TAR          cached archive path  [default $(DL)/<name>-<ver>.tar.gz]
 #     One of:
 #       $1_TAR_URL    tarball URL
 #       $1_ZIP_URL    zip URL (extracted with unzip)
@@ -51,6 +51,12 @@ GRAFT_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
 # $(call LOWER,STR) — lowercase
 LOWER = $(shell echo '$1' | tr '[:upper:]' '[:lower:]')
 
+# $(call VTOKEN,NAME) — a filename-safe token that changes whenever the pinned
+# source version changes: the git commit (with '/' made safe), or a short hash
+# of the tarball/zip URL. Embedded in the default $1_TAR so a version bump lands
+# in a new cache file (and re-extracts) instead of reusing the stale archive.
+VTOKEN = $(if $($1_GIT_URL),$(subst /,_,$($1_COMMIT)),$(firstword $(shell printf %s '$($1_TAR_URL)$($1_ZIP_URL)' | cksum)))
+
 # $(call OVERLAY,SRC,DST) — symlink files from SRC into DST (shell snippet)
 define OVERLAY
 find $1 -type f -printf '%P\n' | while read -r f; do \
@@ -76,8 +82,11 @@ $(GRAFT_PIDWATCH): $(GRAFT_DIR)pidwatch.c | $b
 define FETCH
 $(eval _n := $(call LOWER,$1))
 # Mechanical paths default for convenience; set them before the call to override.
-$(if $($1_TAR),,$(eval $1_TAR := $(DL)/$(_n).tar.gz))
+# TAR carries a version token (git commit or a hash of the source URL) so a
+# version bump fetches a fresh archive and re-extracts instead of silently
+# reusing the stale cached one. TMP is scratch space for the git clone.
 $(if $($1_GIT_URL),$(if $($1_TMP),,$(eval $1_TMP := /tmp/graft_$(_n))))
+$(if $($1_TAR),,$(eval $1_TAR := $(DL)/$(_n)-$(call VTOKEN,$1).tar.gz))
 $(call REQUIRE,$1,DIR TGT TAR)
 $(if $($1_GIT_URL),$(call REQUIRE,$1,COMMIT TMP))
 
@@ -102,11 +111,15 @@ endif
 	tar -czf $$@ -C $(dir $($1_TMP)) --exclude='.git*' $(notdir $($1_TMP))
 endif
 
+# TAR is a normal prerequisite (not order-only) so a freshly fetched archive —
+# e.g. after a version bump changes the cache filename — re-extracts over the
+# existing install dir. DIR stays order-only (its mtime churns as files land).
 ifneq ($($1_ZIP_URL),)
-$($1_TGT): | $($1_TAR) $($1_DIR)
-	cd $($1_DIR) && unzip $(abspath $($1_TAR))
+$($1_TGT): $($1_TAR) | $($1_DIR)
+	cd $($1_DIR) && unzip -o $(abspath $($1_TAR))
+	@touch $(abspath $($1_TGT))
 else
-$($1_TGT): | $($1_TAR) $($1_DIR)
+$($1_TGT): $($1_TAR) | $($1_DIR)
 	tar -xf $($1_TAR) --strip-components=1 -C $($1_DIR) --touch
 endif
 ifneq ($($1_POST_UNPACK),)

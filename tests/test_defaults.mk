@@ -18,9 +18,10 @@ $(foreach V,$(sort $(DIRS)),$(eval $(call MK_DIR,$V)))
 test: $(MINIZ_TGT)
 	@# Extraction still works with no TAR/TMP supplied.
 	@test -f $(MINIZ_DIR)/miniz.h || (echo "ERROR: miniz.h not found" && exit 1)
-	@# FETCH populated MINIZ_TAR with the default $(DL)/<name>.tar.gz ...
-	@test "$(MINIZ_TAR)" = "$(DL)/miniz.tar.gz" || (echo "ERROR: TAR default wrong: '$(MINIZ_TAR)'" && exit 1)
-	@test -f $(DL)/miniz.tar.gz || (echo "ERROR: default TAR cache not created" && exit 1)
+	@# FETCH populated MINIZ_TAR with the default $(DL)/<name>-<ver>.tar.gz,
+	@# where <ver> is the git commit so a bump re-fetches instead of reusing it.
+	@test "$(MINIZ_TAR)" = "$(DL)/miniz-3.0.2.tar.gz" || (echo "ERROR: TAR default wrong: '$(MINIZ_TAR)'" && exit 1)
+	@test -f $(DL)/miniz-3.0.2.tar.gz || (echo "ERROR: default TAR cache not created" && exit 1)
 	@# ... and MINIZ_TMP with /tmp/graft_<name>.
 	@test "$(MINIZ_TMP)" = "/tmp/graft_miniz" || (echo "ERROR: TMP default wrong: '$(MINIZ_TMP)'" && exit 1)
 	@echo "Defaults test: OK"

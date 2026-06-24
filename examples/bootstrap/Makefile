@@ -16,7 +16,7 @@ b  := build
 DL := .cache
 
 GRAFT_URL ?= https://github.com/DESX/graft.git
-GRAFT_REV ?= v1.3.0
+GRAFT_REV ?= v1.4.0
 $(DL)/graft/graft.mk:; @git clone -q --depth=1 -b $(GRAFT_REV) $(GRAFT_URL) $(dir $@)
 include $(DL)/graft/graft.mk
 

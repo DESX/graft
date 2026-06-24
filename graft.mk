@@ -1,4 +1,4 @@
-# Graft — Make helpers for fetching dependencies and supervising processes
+# Graft: Make helpers for fetching dependencies and supervising processes
 # MIT License
 #
 # Before including, set:
@@ -58,16 +58,16 @@ GRAFT_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
 
 # ── helpers ─────────────────────────────────────────────────────────────────
 
-# $(call GRAFT_LOWER,STR) — lowercase
+# $(call GRAFT_LOWER,STR): lowercase
 GRAFT_LOWER = $(shell echo '$1' | tr '[:upper:]' '[:lower:]')
 
-# $(call GRAFT_VTOKEN,NAME) — a filename-safe token that changes whenever the pinned
+# $(call GRAFT_VTOKEN,NAME): a filename-safe token that changes whenever the pinned
 # source version changes: the git commit (with '/' made safe), or a short hash
 # of the tarball/zip/file URL. Embedded in the default cache filename so a version
 # bump lands in a new cache file (and re-fetches) instead of reusing the stale one.
 GRAFT_VTOKEN = $(if $($1_GIT_URL),$(subst /,_,$($1_COMMIT)),$(firstword $(shell printf %s '$($1_TAR_URL)$($1_ZIP_URL)$($1_URL)' | cksum)))
 
-# $(call GRAFT_OVERLAY,SRC,DST) — symlink files from SRC into DST (shell snippet)
+# $(call GRAFT_OVERLAY,SRC,DST): symlink files from SRC into DST (shell snippet)
 define GRAFT_OVERLAY
 find $1 -type f -printf '%P\n' | while read -r f; do \
 	mkdir -p "$2/$$(dirname "$$f")" && rm -f "$2/$$f" && \
@@ -75,7 +75,7 @@ find $1 -type f -printf '%P\n' | while read -r f; do \
 done
 endef
 
-# $(call GRAFT_REQUIRE,NAME,FIELD ...) — error if any NAME_FIELD is empty
+# $(call GRAFT_REQUIRE,NAME,FIELD ...): error if any NAME_FIELD is empty
 GRAFT_REQUIRE = $(foreach f,$2,$(if $($1_$f),,$(error graft: $1_$f must be set)))
 
 define GRAFT_MK_DIR
@@ -83,7 +83,7 @@ $1:
 	mkdir -p $$@
 endef
 
-# pidwatch binary — compiled into $b/ so `make clean` removes it
+# pidwatch binary: compiled into $b/ so `make clean` removes it
 GRAFT_PIDWATCH := $b/pidwatch
 $(GRAFT_PIDWATCH): $(GRAFT_DIR)pidwatch.c | $b
 	@cc -O2 -o $@ $<
@@ -121,8 +121,8 @@ endif
 	tar -czf $$@ -C $(dir $($1_TMP)) --exclude='.git*' $(notdir $($1_TMP))
 endif
 
-# TAR is a normal prerequisite (not order-only) so a freshly fetched archive —
-# e.g. after a version bump changes the cache filename — re-extracts over the
+# TAR is a normal prerequisite (not order-only) so a freshly fetched archive
+# (e.g. after a version bump changes the cache filename) re-extracts over the
 # existing install dir. DIR stays order-only (its mtime churns as files land).
 ifneq ($($1_ZIP_URL),)
 $($1_TGT): $($1_TAR) | $($1_DIR)
@@ -136,7 +136,7 @@ ifneq ($($1_POST_UNPACK),)
 	$($1_POST_UNPACK)
 endif
 ifneq ($($1_PATCH),)
-	patch -p2 -d $($1_DIR) < $($1_PATCH)
+	if [ -s $($1_PATCH) ]; then patch -p2 -d $($1_DIR) < $($1_PATCH); fi
 endif
 ifneq ($($1_OVERLAY),)
 	$$(call GRAFT_OVERLAY,$($1_OVERLAY),$($1_DIR))
@@ -147,7 +147,7 @@ $(_n)_tgt: $($1_TGT)
 
 ifneq ($($1_PATCH),)
 .PHONY: $(_n)_patch
-$(_n)_patch: | $($1_TGT) $($1_PATCH)
+$(_n)_patch: | $($1_TGT)
 	rm -rf $($1_TMP) && mkdir -p $($1_TMP)/old
 	cp -r $($1_DIR) $($1_TMP)/new
 	tar -xf $($1_TAR) --strip-components=1 -C $($1_TMP)/old
@@ -159,6 +159,7 @@ ifneq ($($1_OVERLAY),)
 	$$(call GRAFT_OVERLAY,$($1_OVERLAY),$($1_TMP)/old)
 	$$(call GRAFT_OVERLAY,$($1_OVERLAY),$($1_TMP)/new)
 endif
+	@mkdir -p $(dir $(abspath $($1_PATCH)))
 	cd $($1_TMP) && diff -ruN ./old ./new > $(abspath $($1_PATCH)) | true
 endif
 endef
@@ -188,7 +189,7 @@ $(_n)_tgt: $($1_TGT)
 endef
 
 # ── GRAFT_DAEMON ──────────────────────────────────────────────────────────────────
-# Optional: $1_STDOUT and $1_STDERR — if set, pidwatch redirects the
+# Optional: $1_STDOUT and $1_STDERR, if set, pidwatch redirects the
 # daemon's stdout/stderr to those file paths (append mode) instead of
 # /dev/null. The paths are also written into the pidfile so
 # `pidwatch status` can show where the logs are.

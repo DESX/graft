@@ -19,7 +19,7 @@
 #       $1_TAR_URL    tarball URL
 #       $1_ZIP_URL    zip URL (extracted with unzip)
 #       $1_GIT_URL    git URL
-#     $1_COMMIT       git tag/branch/sha                         [git only]
+#     $1_COMMIT       git tag, branch, or full/short SHA          [git only]
 #     $1_TMP          scratch dir for git clone   [git only; default /tmp/graft_<name>]
 #     $1_EXTRA        extra prereqs of the archive                 [optional]
 #     $1_PRE_UNPACK   shell hook before the git clone is archived  [optional]
@@ -113,8 +113,11 @@ endif
 ifneq ($($1_GIT_URL),)
 $($1_TAR): | $(DL) $($1_EXTRA)
 	rm -rf $($1_TMP) && mkdir -p $($1_TMP)
-	git clone -c advice.detachedHead=false --branch $($1_COMMIT) \
-		--depth 1 --recursive --shallow-submodules $($1_GIT_URL) $($1_TMP)
+	git -C $($1_TMP) init -q
+	git -C $($1_TMP) remote add origin $($1_GIT_URL)
+	git -C $($1_TMP) fetch -q --depth 1 origin $($1_COMMIT)
+	git -C $($1_TMP) -c advice.detachedHead=false checkout -q FETCH_HEAD
+	git -C $($1_TMP) submodule update -q --init --recursive --depth 1
 ifneq ($($1_PRE_UNPACK),)
 	$($1_PRE_UNPACK)
 endif

@@ -1,7 +1,7 @@
 # Graft test runner
 SHELL := /bin/bash
 
-TESTS := test_tar_download test_git_clone test_patch test_patch_generate test_overlay test_caching test_dependencies test_pidwatch test_bootstrap test_defaults test_cache_version test_fetch_file
+TESTS := test_tar_download test_zip_download test_git_clone test_git_ref test_patch test_patch_generate test_patch_robust test_overlay test_hooks test_caching test_dependencies test_pidwatch test_bootstrap test_defaults test_cache_version test_fetch_file
 
 .PHONY: all clean $(TESTS)
 

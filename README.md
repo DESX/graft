@@ -1,44 +1,59 @@
 # Graft
 
-Graft is a library for GNU Makefiles. You include a single `graft.mk` and get
-macros for fetching, caching, patching, and overlaying source dependencies, plus
-a small process supervisor. It needs only `make`, `curl`, `git`, `tar`, and a C
-compiler.
+Graft is a library for GNU Makefiles. Include a single `graft.mk` and get macros
+for fetching, caching, patching, and overlaying source dependencies, plus a small
+process supervisor. It needs only `make`, `curl`, `git`, `tar`, and a C compiler
+(`unzip` is needed only for zip sources, `patch` only for patches).
+
+- [Self-bootstrapping](#self-bootstrapping) — clone graft on first build, vendor nothing.
+- [Fetching a dependency](#fetching-a-dependency) — download/clone, cache, and extract a source tree from a git repo, tarball, or zip.
+- [Versioned caching](#versioned-caching) — bump a version and graft re-fetches; leave it and nothing re-downloads.
+- [Build hooks](#build-hooks-pre_unpack--post_unpack) — run a configure/compile step while fetching (`PRE_UNPACK` / `POST_UNPACK`).
+- [Ordering dependencies](#ordering-dependencies) — make one dependency build before another (`EXTRA`).
+- [Patching a dependency](#patching-a-dependency) — change existing upstream files, captured as a tracked diff.
+- [Overlaying files](#overlaying-files) — add or replace whole files with your own.
+- [Fetching a single file](#fetching-a-single-file) — grab one header/binary/script (`GRAFT_FETCH_FILE`).
+- [Supervising a process](#supervising-a-process) — start/probe/stop a daemon via a pidfile (`GRAFT_DAEMON`).
+- [Creating directories](#creating-directories) — emit `mkdir -p` rules in bulk (`GRAFT_MK_DIR`).
+- [Generated targets](#generated-targets) — the phony targets each call adds (`name_tgt`, `name_patch`, `name_stop`, …).
 
 Every macro is prefixed `GRAFT_`, and every variable a dependency reads is named
-`NAME_FIELD`, so `grep GRAFT_` and `grep NAME_` show exactly what comes from
-graft and what each dependency uses. Full variable lists are in the header
-comment of `graft.mk`.
-
-## Features
-
-- [Self-bootstrapping](#self-bootstrapping): clone graft on first build, no vendoring.
-- [Fetching a dependency](#fetching-a-dependency): download, cache, and extract a source tree.
-- [Patching a dependency](#patching-a-dependency): make a small change to existing upstream files without forking.
-- [Overlaying files](#overlaying-files): add or replace whole files with your own.
-- [Other macros](#other-macros): single-file fetch, daemon supervision, bulk mkdir.
+`NAME_FIELD`, so `grep GRAFT_` and `grep NAME_` show exactly what comes from graft
+and what each dependency uses. The authoritative variable list for every macro is
+the header comment of `graft.mk`. Graft never invents defaults beyond the few
+documented below — a missing required field is an immediate `$(error)`.
 
 ## Self-bootstrapping
 
-You do not have to vendor `graft.mk`. Add a rule that clones graft when the
+You do not have to vendor `graft.mk`. Add one rule that clones graft when the
 include is missing, then `include` it. On a fresh checkout `make` fetches graft
-and re-reads the Makefile with the macros available, with no setup step. Pin a
-release tag so the build stays reproducible.
+and re-reads the Makefile with the macros available — no setup step:
 
 ```makefile
-GRAFT_URL ?= https://github.com/DESX/graft.git
-GRAFT_REV ?= v1.4.0
-.cache/graft/graft.mk:; @git clone -q --depth=1 -b $(GRAFT_REV) $(GRAFT_URL) $(dir $@)
+.cache/graft/graft.mk:; @git clone -q --depth=1 -b v1.5.0 https://github.com/DESX/graft.git $(dir $@)
 include .cache/graft/graft.mk
 ```
 
-To update graft, bump `GRAFT_REV` and delete `.cache/graft`.
+Pin a release tag (`-b v1.5.0`), not a branch: `graft.mk` is part of your build
+contract, and tracking `main` would let an upstream change alter your build
+between checkouts. To update graft, bump the tag and delete `.cache/graft`. A
+runnable version of this is in [`examples/bootstrap`](examples/bootstrap).
 
 ## Fetching a dependency
 
-`GRAFT_FETCH` downloads an archive (or clones a git repo), caches it, and
-extracts it into a directory you choose. Set the `NAME_*` variables, then call
-the macro:
+`GRAFT_FETCH` downloads an archive (or clones a git repo), caches it, and extracts
+it into a directory you choose. Set the `NAME_*` variables, call the macro, then
+add the install dir and cache dir to `DIRS`. `NAME_TGT` is any file that exists
+once extraction succeeds — your build rules depend on it.
+
+The source is exactly one of `NAME_GIT_URL`, `NAME_TAR_URL`, or `NAME_ZIP_URL`.
+
+### From git
+
+Set `NAME_GIT_URL` and `NAME_COMMIT`. `NAME_COMMIT` may be a **tag, a branch, or a
+full commit SHA** (short SHAs are not supported — the clone is a shallow fetch of
+that one ref). `NAME_TAR` (cache path) and `NAME_TMP` (clone scratch dir) both
+default, so a git dependency needs only four lines:
 
 ```makefile
 b  := build
@@ -46,7 +61,7 @@ DL := .cache
 
 FMT_DIR     := $b/fmt
 FMT_TGT     := $(FMT_DIR)/README.md
-FMT_COMMIT  := 10.2.1
+FMT_COMMIT  := 11.0.2                                   # tag, branch, or full SHA
 FMT_GIT_URL := https://github.com/fmtlib/fmt.git
 $(eval $(call GRAFT_FETCH,FMT))
 
@@ -54,57 +69,129 @@ DIRS := $b $(DL) $(FMT_DIR)
 $(foreach d,$(sort $(DIRS)),$(eval $(call GRAFT_MK_DIR,$d)))
 ```
 
-`NAME_TGT` is any file that exists once extraction succeeds; your build rules
-depend on it. The source is one of `NAME_GIT_URL` (with `NAME_COMMIT`),
-`NAME_TAR_URL`, or `NAME_ZIP_URL`.
+### From a tarball
+
+Set `NAME_TAR_URL`. The archive is fetched with `curl` and extracted with `tar`,
+stripping the leading directory (`--strip-components=1`), so its contents land
+directly in `NAME_DIR`:
+
+```makefile
+JQ_DIR     := $b/jq
+JQ_TGT     := $(JQ_DIR)/README.md
+JQ_TAR_URL := https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-1.7.1.tar.gz
+$(eval $(call GRAFT_FETCH,JQ))
+```
+
+### From a zip
+
+Set `NAME_ZIP_URL`. Extraction uses `unzip` and, unlike the tar path, does **not**
+strip a leading directory — files land exactly as the archive stores them, so
+point `NAME_TGT` at the real path inside the zip:
+
+```makefile
+MINIZ_DIR     := $b/miniz
+MINIZ_TGT     := $(MINIZ_DIR)/miniz.h        # flat zip → header at the top level
+MINIZ_TAR     := $(DL)/miniz-3.0.2.zip
+MINIZ_ZIP_URL := https://github.com/richgel999/miniz/releases/download/3.0.2/miniz-3.0.2.zip
+$(eval $(call GRAFT_FETCH,MINIZ))
+```
+
+## Versioned caching
 
 The caching is the important part. The cached archive's filename embeds a version
-token: the git commit, or a hash of the URL. Bump `FMT_COMMIT` and the filename
-changes, so graft fetches the new version and re-extracts. Leave it alone and
-nothing re-downloads. No stale checkouts, no manual cache busting.
+token — the git commit for a git source, or a hash of the URL for a tarball/zip.
+Bump `NAME_COMMIT` (or the URL) and the filename changes, so graft fetches the new
+version and re-extracts. Leave it alone and nothing re-downloads. Switching back
+to an old version reuses its still-cached archive. No stale checkouts, no manual
+cache busting.
+
+You normally let `NAME_TAR` default. Set it explicitly only to control the cache
+filename (for example to give a zip a `.zip` name, as above). If you hard-code a
+`NAME_TAR` without a version in it, you opt out of automatic re-fetching — so keep
+the version in the name or leave it to graft.
+
+## Build hooks (PRE_UNPACK / POST_UNPACK)
+
+Some dependencies must be compiled, not just unpacked. Two optional shell hooks
+run during the fetch:
+
+- `NAME_PRE_UNPACK` runs after a git clone, **before** the tree is archived into
+  the cache — so a compiled artifact is captured in the cache and survives a clean
+  re-extract. Use it to run a build inside the clone scratch dir (`NAME_TMP`).
+- `NAME_POST_UNPACK` runs after extraction into `NAME_DIR`.
+
+```makefile
+FMT_DIR       := $b/fmt
+FMT_TGT       := $(FMT_DIR)/README.md
+FMT_COMMIT    := 11.0.2
+FMT_GIT_URL   := https://github.com/fmtlib/fmt.git
+FMT_PRE_UNPACK = cmake -S $(FMT_TMP) -B $(FMT_TMP)/build && cmake --build $(FMT_TMP)/build --target fmt
+$(eval $(call GRAFT_FETCH,FMT))
+```
+
+The [`examples/cpp`](examples/cpp) Makefile uses this pattern to fetch and build
+fmt, Catch2, yaml-cpp, and SQLiteCpp with CMake.
+
+## Ordering dependencies
+
+`NAME_EXTRA` adds extra prerequisites to a dependency's fetch, so one dependency
+(or any other target) is built first. This is how you make a fetched tool — say a
+pinned CMake — available before the dependencies that need it:
+
+```makefile
+AU_EXTRA := $(CMAKE_TGT)    # don't fetch/build AU until CMake is in place
+$(eval $(call GRAFT_FETCH,AU))
+```
 
 ## Patching a dependency
 
-Patching is for making a small change to files that already exist upstream,
-without forking the repo or vendoring its source. You edit the extracted files in
-place, and graft captures the edits as a tracked diff that it re-applies on every
-clean build.
+Patching is for a small change to files that **already exist** upstream, without
+forking or vendoring. You edit the extracted files in place and graft captures the
+edits as a tracked diff that it re-applies on every clean build. (To add
+brand-new files instead, use an [overlay](#overlaying-files).)
 
-Point `NAME_PATCH` at a patch file. It does not need to exist yet:
+Point `NAME_PATCH` at a patch file *before* the `GRAFT_FETCH` call. The file need
+not exist yet:
 
 ```makefile
 FMT_PATCH := patches/fmt.patch
 $(eval $(call GRAFT_FETCH,FMT))
 ```
 
-Say you need to change one line in fmt's `core.h`. The full sequence:
+Say you need to change one line in fmt's `core.h`. The exact sequence:
 
 ```
-make                                # fetches and extracts fmt; no patch yet
-vim build/fmt/include/fmt/core.h    # edit the file in place
-make fmt_patch                      # writes your edit into patches/fmt.patch
-git add patches/fmt.patch           # commit the small diff, not the whole repo
+make                                # 1. fetch + extract fmt (no patch yet — the file is absent)
+vim build/fmt/include/fmt/core.h    # 2. edit the extracted file in place
+make fmt_patch                      # 3. capture your edits into patches/fmt.patch
+git add patches/fmt.patch           # 4. commit the small diff, not the whole repo
 ```
 
-From then on, any clean build re-applies `patches/fmt.patch` automatically, so
-the change rides along with a fresh fetch. Rerun `make fmt_patch` whenever you
-edit the files again to refresh the diff. A patch records changes to files that
-already exist; to add brand-new files, use an overlay.
+From then on, any clean build re-applies `patches/fmt.patch` automatically, so the
+change rides along with a fresh fetch. Re-run `make fmt_patch` whenever you edit
+the files again to refresh the diff.
+
+The order is forgiving: you can add `NAME_PATCH` and run `make fmt_patch` long
+after the first build, and it still works because graft reconstructs the pristine
+tree from the cached archive to diff against. If you cleaned the download cache in
+between, `make fmt_patch` re-fetches the archive without disturbing your in-place
+edits.
 
 ## Overlaying files
 
-An overlay is for adding or replacing whole files with your own, without changing
-the upstream content. You keep the file in your repo and graft symlinks it over
-the extracted dependency, so it stays a normal tracked file that you fully own.
+An overlay adds or replaces **whole files** with your own, without changing
+upstream content. The file lives in your repo and graft symlinks it over the
+extracted dependency, so it stays a normal tracked file you fully own.
 
-Point `NAME_OVERLAY` at a directory that mirrors the dependency's layout:
+Point `NAME_OVERLAY` at a directory that mirrors the dependency's layout, before
+the `GRAFT_FETCH` call:
 
 ```makefile
 FMT_OVERLAY := overlays/fmt/
 $(eval $(call GRAFT_FETCH,FMT))
 ```
 
-Say you want to drop in your own `config.h`. The full sequence:
+Say you want to drop in your own `config.h`. The exact sequence:
 
 ```
 mkdir -p overlays/fmt/include/fmt
@@ -117,11 +204,17 @@ Every file under `overlays/fmt/` is symlinked into the matching path in
 `build/fmt/`, so it survives a re-fetch. Because it is a symlink, editing
 `build/fmt/include/fmt/config.h` edits your tracked `overlays/fmt/...` copy, and
 the change shows up in `git status` instead of being lost in the build tree.
+Overlay files are excluded from generated patches, so patch and overlay compose
+cleanly on the same dependency.
 
-## Other macros
+## Fetching a single file
 
-`GRAFT_FETCH_FILE` fetches a single file (a header, binary, or script) to a path
-you choose, with the same versioned caching as `GRAFT_FETCH`:
+`GRAFT_FETCH_FILE` fetches one file — a header, binary, or script — to a path you
+choose, with the same versioned caching as `GRAFT_FETCH` but no archive or
+extraction. Required: `NAME_TGT` and `NAME_URL`. Optional: `NAME_FILE` (cache
+path, defaults to a versioned name), `NAME_EXTRA` (extra prerequisites), and
+`NAME_POST_FETCH` (a shell hook run after the file is installed). The install
+directory is created for you:
 
 ```makefile
 STB_TGT := $b/include/stb_image.h
@@ -129,9 +222,62 @@ STB_URL := https://raw.githubusercontent.com/nothings/stb/v2.30/stb_image.h
 $(eval $(call GRAFT_FETCH_FILE,STB))
 ```
 
+Bump the version in `STB_URL` and graft re-downloads, exactly like `GRAFT_FETCH`.
+
+## Supervising a process
+
 `GRAFT_DAEMON` starts, probes, and stops a long-running process through a pidfile
-kept honest by a bundled watchdog. `GRAFT_MK_DIR` emits `mkdir -p` rules in bulk.
-See the header comment in `graft.mk` for their variables.
+kept honest by a bundled watchdog (`pidwatch`, compiled into `$b/` on demand).
+Required variables:
+
+| Variable          | Meaning                                       |
+|-------------------|-----------------------------------------------|
+| `NAME_CMD`        | command to run                                |
+| `NAME_PIDFILE`    | pidfile path                                  |
+| `NAME_TIMEOUT`    | auto-kill the process after N seconds         |
+| `NAME_READY_CMD`  | readiness probe (a shell command)             |
+| `NAME_READY_TRIES`| readiness attempts (100 ms apart)             |
+
+Optional: `NAME_DEP` (prerequisites that trigger a restart when changed),
+`NAME_STDOUT` / `NAME_STDERR` (redirect logs to files instead of `/dev/null`).
+
+```makefile
+SRV_CMD         := ./build/server --port 8080
+SRV_PIDFILE     := build/server.pid
+SRV_TIMEOUT     := 86400
+SRV_READY_CMD   := curl -sf http://localhost:8080/
+SRV_READY_TRIES := 20
+SRV_DEP         := build/server          # rebuild → restart
+$(eval $(call GRAFT_DAEMON,SRV))
+```
+
+Building `NAME_PIDFILE` starts the daemon and blocks until the readiness probe
+passes, so depend on it from whatever needs the service running. The call also
+generates `srv_stop` and `srv_status` targets. Running any build with `RESTART=1`
+stops every graft daemon at startup. A full live-reload web server is in
+[`examples/spa`](examples/spa).
+
+## Creating directories
+
+`GRAFT_MK_DIR` emits a `mkdir -p` rule for a directory. Collect every directory
+your build needs (install dirs, the cache dir, the output dir) in `DIRS` and
+generate the rules in one sweep:
+
+```makefile
+DIRS := $b $(DL) $(FMT_DIR) $(JQ_DIR)
+$(foreach d,$(sort $(DIRS)),$(eval $(call GRAFT_MK_DIR,$d)))
+```
+
+## Generated targets
+
+Each macro call adds phony helper targets named from the lowercased `NAME`:
+
+| Target        | From                  | Does                                          |
+|---------------|-----------------------|-----------------------------------------------|
+| `name_tgt`    | `GRAFT_FETCH`, `GRAFT_FETCH_FILE` | fetch + extract/install the dependency |
+| `name_patch`  | `GRAFT_FETCH` (when `NAME_PATCH` is set) | (re)generate the tracked diff from in-place edits |
+| `name_stop`   | `GRAFT_DAEMON`        | stop the daemon                               |
+| `name_status` | `GRAFT_DAEMON`        | report daemon status                          |
 
 ## Testing and requirements
 
@@ -139,8 +285,15 @@ See the header comment in `graft.mk` for their variables.
 cd tests && make
 ```
 
+The suite covers each documented sequence: git fetch by tag and by commit SHA,
+tarball and zip extraction, versioned caching and re-fetch on a bump, the patch
+and overlay workflows (including patch generation after the cache is cleaned),
+single-file fetch, dependency ordering, self-bootstrap, and the process
+supervisor.
+
 Requires GNU Make, curl, git, tar (with gzip), and a C compiler, plus `unzip` for
-zip sources and `patch` for patches.
+zip sources and `patch` for patches. (The zip test skips itself when `unzip` is
+absent.)
 
 ## License
 

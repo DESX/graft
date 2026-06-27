@@ -19,7 +19,7 @@
 #       $1_TAR_URL    tarball URL
 #       $1_ZIP_URL    zip URL (extracted with unzip)
 #       $1_GIT_URL    git URL
-#     $1_COMMIT       git tag, branch, or full/short SHA          [git only]
+#     $1_COMMIT       git tag, branch, or full commit SHA         [git only]
 #     $1_TMP          scratch dir for git clone   [git only; default /tmp/graft_<name>]
 #     $1_EXTRA        extra prereqs of the archive                 [optional]
 #     $1_PRE_UNPACK   shell hook before the git clone is archived  [optional]
@@ -149,8 +149,14 @@ endif
 $(_n)_tgt: $($1_TGT)
 
 ifneq ($($1_PATCH),)
+# name_patch diffs the live (edited) install dir against a pristine tree it
+# reconstructs from the cached archive. It depends on TAR, NOT TGT, on purpose:
+# pulling TGT into the graph lets a missing or freshly-rebuilt archive re-extract
+# over the very edits being captured, silently yielding an empty patch. TAR is
+# re-fetched if absent; the install dir is always read exactly as it sits.
 .PHONY: $(_n)_patch
-$(_n)_patch: | $($1_TGT)
+$(_n)_patch: $($1_TAR)
+	@test -d $($1_DIR) || { echo "graft: $($1_DIR) missing — run 'make' and edit it before 'make $(_n)_patch'"; exit 1; }
 	rm -rf $($1_TMP) && mkdir -p $($1_TMP)/old
 	cp -r $($1_DIR) $($1_TMP)/new
 	tar -xf $($1_TAR) --strip-components=1 -C $($1_TMP)/old

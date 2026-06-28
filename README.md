@@ -1,5 +1,7 @@
 # Graft
 
+[![tests](https://github.com/DESX/graft/actions/workflows/test.yml/badge.svg)](https://github.com/DESX/graft/actions/workflows/test.yml)
+
 Graft is a library for GNU Makefiles. Include a single `graft.mk` and get macros
 for fetching, caching, patching, and overlaying source dependencies, plus a
 process supervisor.
@@ -16,14 +18,17 @@ process supervisor.
 - [Creating directories](#creating-directories): emit `mkdir -p` rules in bulk (`GRAFT_MK_DIR`).
 - [Generated targets](#generated-targets): the phony targets each call adds (`name_tgt`, `name_patch`, `name_stop`).
 
-Graft itself is just Make code; its macros shell out to ordinary tools. The core
-(fetching, caching, patching, overlaying) needs `make`, `curl`, `git`, and `tar`
-with gzip. Three more tools are each needed only by one feature: `unzip` for zip
-sources, `patch` for the patch workflow, and a C compiler for the process
-supervisor, which builds the bundled `pidwatch`. On Debian or Ubuntu,
-`sudo apt install make curl git tar unzip patch gcc` covers everything; on macOS,
-`xcode-select --install` provides make, git, tar, patch, and a compiler, and
-`curl` is already present.
+Graft is just Make code; its macros shell out to ordinary tools, and it targets
+Linux with the GNU coreutils/findutils userland (it relies on GNU behaviors of
+`find`, `tar`, and `ln`). The core (fetching, caching, patching, overlaying) needs
+`make`, `curl`, `git`, and `tar` with gzip. A few tools are each needed only by one
+feature: `unzip` for zip sources, `patch` for the patch workflow, `sha256sum` for
+the optional download integrity check, and a C compiler for the process supervisor,
+which builds the bundled `pidwatch`. On Debian or Ubuntu,
+`sudo apt install make curl git tar unzip patch coreutils gcc` covers everything.
+On macOS, install GNU coreutils and findutils (`brew install coreutils findutils`)
+and put them ahead on `PATH`; without them the overlay feature, which uses GNU
+`find` and `ln`, will not work.
 
 Every macro is prefixed `GRAFT_`, and every variable a dependency reads is named
 `NAME_FIELD`, so `grep GRAFT_` and `grep NAME_` show exactly what comes from graft
@@ -39,7 +44,7 @@ clones graft when the include is missing, then `include` it. On a fresh checkout
 is no separate setup step:
 
 ```makefile
-GRAFT_VER ?= v1.6.0
+GRAFT_VER ?= v1.7.0
 .cache/graft-$(GRAFT_VER)/graft.mk:; @git clone -q --depth=1 -b $(GRAFT_VER) https://github.com/DESX/graft.git $(dir $@)
 include .cache/graft-$(GRAFT_VER)/graft.mk
 ```
@@ -127,6 +132,17 @@ MINIZ_TGT     := $(MINIZ_DIR)/miniz.h        # flat zip: header sits at the top 
 MINIZ_TAR     := $(GRAFT_CACHE)/miniz-3.0.2.zip
 MINIZ_ZIP_URL := https://github.com/richgel999/miniz/releases/download/3.0.2/miniz-3.0.2.zip
 $(eval $(call GRAFT_FETCH,MINIZ))
+```
+
+Downloads use `curl -fL`, so an HTTP error (404, 500) fails the build instead of
+caching the error page, and each archive is written to a temp file renamed into
+place so the cache only ever holds complete files. For tarball and zip sources you
+can set `NAME_SHA256` to the expected hash; graft verifies the download and fails
+if it does not match. This is worth doing for URL sources, which — unlike a git
+`NAME_COMMIT` — are not self-pinning:
+
+```makefile
+JQ_SHA256 := <sha256 of jq-1.7.1.tar.gz>    # `sha256sum` the file to get this
 ```
 
 ## Versioned caching
@@ -245,9 +261,9 @@ cleanly on the same dependency.
 `GRAFT_FETCH_FILE` fetches one file (a header, binary, or script) to a path you
 choose, with the same versioned caching as `GRAFT_FETCH` but no archive or
 extraction. Required: `NAME_TGT` and `NAME_URL`. Optional: `NAME_FILE` (cache path,
-defaults to a versioned name), `NAME_EXTRA` (extra prerequisites), and
-`NAME_POST_FETCH` (a shell hook run after the file is installed). The install
-directory is created for you:
+defaults to a versioned name), `NAME_SHA256` (expected hash, verified after
+download), `NAME_EXTRA` (extra prerequisites), and `NAME_POST_FETCH` (a shell hook
+run after the file is installed). The install directory is created for you:
 
 ```makefile
 STB_TGT := $b/include/stb_image.h
@@ -329,10 +345,11 @@ cd tests && make
 The suite covers each documented sequence: git fetch by tag and by commit SHA,
 tarball and zip extraction, versioned caching and re-fetch on a bump, the patch and
 overlay workflows (including patch generation after the cache is cleaned),
-single-file fetch, dependency ordering, the build hooks, self-bootstrap, and the
-process supervisor. It also checks that the cache is relocatable (move it, then
-rebuild offline with the network blocked) and that the versioned bootstrap coexists
-across versions. The zip test skips itself when `unzip` is not installed.
+single-file fetch, the optional `NAME_SHA256` integrity check, dependency ordering,
+the build hooks, self-bootstrap, and the process supervisor. It also checks that the
+cache is relocatable (move it, then rebuild offline with the network blocked) and
+that the versioned bootstrap coexists across versions. The zip test skips itself
+when `unzip` is not installed.
 
 ## License
 

@@ -313,6 +313,14 @@ static int do_start(const char *pidfile, int timeout,
     fprintf(f, "started=%s\n", started);
     fclose(f);
 
+    /* Fully detach the watchdog's own std fds. Otherwise it keeps the caller's
+     * (make's) stdout/stderr open for the daemon's whole lifetime, which can hang
+     * a pipe or CI step waiting for EOF. The service already redirected its own
+     * fds above, so this only affects the watchdog. */
+    redirect_fd(0, NULL);
+    redirect_fd(1, NULL);
+    redirect_fd(2, NULL);
+
     /* Install signal handlers */
     struct sigaction sa = { .sa_handler = on_signal, .sa_flags = 0 };
     sigemptyset(&sa.sa_mask);

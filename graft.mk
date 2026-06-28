@@ -23,7 +23,8 @@
 #       $1_ZIP_URL    zip URL (extracted with unzip)
 #       $1_GIT_URL    git URL
 #     $1_COMMIT       git tag, branch, or full commit SHA         [git only]
-#     $1_TMP          scratch dir for git clone   [git only; default /tmp/graft_<name>]
+#     $1_TMP          scratch dir for git clone  [git only; default $b/graft-tmp/<name>]
+#     $1_SHA256       expected sha256 of the archive       [tar/zip only; optional]
 #     $1_EXTRA        extra prereqs of the archive                 [optional]
 #     $1_PRE_UNPACK   shell hook before the git clone is archived  [optional]
 #     $1_POST_UNPACK  shell hook after extraction                  [optional]
@@ -37,6 +38,7 @@
 #     $1_TGT          install path for the file                     [required]
 #     $1_URL          source URL                                    [required]
 #     $1_FILE         cached download path     [default $(GRAFT_CACHE)/<name>-<ver>]
+#     $1_SHA256       expected sha256 of the downloaded file        [optional]
 #     $1_EXTRA        extra prereqs of the download                 [optional]
 #     $1_POST_FETCH   shell hook after the file is installed        [optional]
 #   Caller must add $(GRAFT_CACHE) to DIRS; the install dir is created automatically.
@@ -58,6 +60,12 @@
 #     $(foreach d,$(DIRS),$(eval $(call GRAFT_MK_DIR,$d)))
 
 GRAFT_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
+
+# A per-invocation id used to name temp files. Downloads/archives are written to
+# "<final>.part.$(GRAFT_RUNID)" and atomically renamed into place, so a crashed or
+# concurrent build never leaves a half-written file that looks like a valid cache
+# entry — important when GRAFT_CACHE is shared between projects or jobs.
+GRAFT_RUNID := $(shell echo $$$$)
 
 # ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -97,20 +105,29 @@ $(eval _n := $(call GRAFT_LOWER,$1))
 # Mechanical paths default for convenience; set them before the call to override.
 # TAR carries a version token (git commit or a hash of the source URL) so a
 # version bump fetches a fresh archive and re-extracts instead of silently
-# reusing the stale cached one. TMP is scratch space for the git clone.
-$(if $($1_GIT_URL),$(if $($1_TMP),,$(eval $1_TMP := /tmp/graft_$(_n))))
+# reusing the stale cached one. TMP is scratch space for the git clone; it lives
+# under $b so it is namespaced per project and removed by `make clean`.
+$(if $($1_GIT_URL),$(if $($1_TMP),,$(eval $1_TMP := $b/graft-tmp/$(_n))))
 $(if $($1_TAR),,$(eval $1_TAR := $(GRAFT_CACHE)/$(_n)-$(call GRAFT_VTOKEN,$1).tar.gz))
 $(call GRAFT_REQUIRE,$1,DIR TGT TAR)
 $(if $($1_GIT_URL),$(call GRAFT_REQUIRE,$1,COMMIT TMP))
 
+# Downloads use `curl -fL` so an HTTP error (404, 500) fails the build instead of
+# saving the error page as the archive, and write to a temp file renamed into
+# place so the cache only ever holds complete files. $1_SHA256, if set, is the
+# expected sha256 of the downloaded archive (tar/zip sources).
 ifneq ($($1_TAR_URL),)
 $($1_TAR): | $(GRAFT_CACHE) $($1_EXTRA)
-	curl -L $($1_TAR_URL) > $$@
+	curl -fL --retry 3 $($1_TAR_URL) > $$@.part.$(GRAFT_RUNID)
+	$(if $($1_SHA256),printf '%s  %s\n' '$($1_SHA256)' '$$@.part.$(GRAFT_RUNID)' | sha256sum -c -,@:)
+	mv -f $$@.part.$(GRAFT_RUNID) $$@
 endif
 
 ifneq ($($1_ZIP_URL),)
 $($1_TAR): | $(GRAFT_CACHE) $($1_EXTRA)
-	curl -L $($1_ZIP_URL) > $$@
+	curl -fL --retry 3 $($1_ZIP_URL) > $$@.part.$(GRAFT_RUNID)
+	$(if $($1_SHA256),printf '%s  %s\n' '$($1_SHA256)' '$$@.part.$(GRAFT_RUNID)' | sha256sum -c -,@:)
+	mv -f $$@.part.$(GRAFT_RUNID) $$@
 endif
 
 ifneq ($($1_GIT_URL),)
@@ -124,7 +141,8 @@ $($1_TAR): | $(GRAFT_CACHE) $($1_EXTRA)
 ifneq ($($1_PRE_UNPACK),)
 	$($1_PRE_UNPACK)
 endif
-	tar -czf $$@ -C $(dir $($1_TMP)) --exclude='.git*' $(notdir $($1_TMP))
+	tar -czf $$@.part.$(GRAFT_RUNID) -C $(dir $($1_TMP)) --exclude='.git*' $(notdir $($1_TMP))
+	mv -f $$@.part.$(GRAFT_RUNID) $$@
 endif
 
 # TAR is a normal prerequisite (not order-only) so a freshly fetched archive
@@ -184,8 +202,13 @@ $(eval _n := $(call GRAFT_LOWER,$1))
 $(if $($1_FILE),,$(eval $1_FILE := $(GRAFT_CACHE)/$(_n)-$(call GRAFT_VTOKEN,$1)))
 $(call GRAFT_REQUIRE,$1,TGT URL FILE)
 
+# `curl -fL` so an HTTP error fails the build instead of caching the error page;
+# written to a temp file renamed into place so the cache holds only complete
+# files. $1_SHA256, if set, is the expected sha256 of the downloaded file.
 $($1_FILE): | $(GRAFT_CACHE) $($1_EXTRA)
-	curl -L $($1_URL) > $$@
+	curl -fL --retry 3 $($1_URL) > $$@.part.$(GRAFT_RUNID)
+	$(if $($1_SHA256),printf '%s  %s\n' '$($1_SHA256)' '$$@.part.$(GRAFT_RUNID)' | sha256sum -c -,@:)
+	mv -f $$@.part.$(GRAFT_RUNID) $$@
 
 # FILE is a normal prerequisite so a freshly downloaded version re-installs over
 # the existing target. The install dir is created on demand.

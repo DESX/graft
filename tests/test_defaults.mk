@@ -22,6 +22,6 @@ test: $(MINIZ_TGT)
 	@# where <ver> is the git commit so a bump re-fetches instead of reusing it.
 	@test "$(MINIZ_TAR)" = "$(GRAFT_CACHE)/miniz-3.0.2.tar.gz" || (echo "ERROR: TAR default wrong: '$(MINIZ_TAR)'" && exit 1)
 	@test -f $(GRAFT_CACHE)/miniz-3.0.2.tar.gz || (echo "ERROR: default TAR cache not created" && exit 1)
-	@# ... and MINIZ_TMP with /tmp/graft_<name>.
-	@test "$(MINIZ_TMP)" = "/tmp/graft_miniz" || (echo "ERROR: TMP default wrong: '$(MINIZ_TMP)'" && exit 1)
+	@# ... and MINIZ_TMP with $b/graft-tmp/<name> (per-project scratch, removed by clean).
+	@test "$(MINIZ_TMP)" = "$b/graft-tmp/miniz" || (echo "ERROR: TMP default wrong: '$(MINIZ_TMP)'" && exit 1)
 	@echo "Defaults test: OK"

@@ -2,7 +2,7 @@
 # succeeds with no patch, you edit the extracted tree in place, `make name_patch`
 # writes the diff, and a clean rebuild re-applies it.
 b := build_test_patch_generate
-DL := .cache_test_patch_generate
+GRAFT_CACHE := .cache_test_patch_generate
 
 include ../graft.mk
 
@@ -14,7 +14,7 @@ MINIZ_GIT_URL := https://github.com/richgel999/miniz.git
 MINIZ_PATCH   := $b/patches/miniz.patch
 $(eval $(call GRAFT_FETCH,MINIZ))
 
-DIRS := $b $(DL) $(MINIZ_DIR)
+DIRS := $b $(GRAFT_CACHE) $(MINIZ_DIR)
 $(foreach V,$(sort $(DIRS)),$(eval $(call GRAFT_MK_DIR,$V)))
 
 .PHONY: test
@@ -33,7 +33,7 @@ test: | $b
 	@echo "  generate patch from in-place edit: OK"
 
 	@# ── Clean rebuild re-applies the generated patch ──
-	@rm -rf $(MINIZ_DIR) $(DL)
+	@rm -rf $(MINIZ_DIR) $(GRAFT_CACHE)
 	@$(MAKE) -s -f test_patch_generate.mk $(MINIZ_TGT)
 	@grep -q "MY LOCAL TWEAK" $(MINIZ_DIR)/miniz.h || (echo "ERROR: patch not re-applied on clean build" && exit 1)
 	@echo "Patch-generate test: OK"

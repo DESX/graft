@@ -1,6 +1,6 @@
 # Test: PATCH application
 b := build_test_patch
-DL := .cache_test_patch
+GRAFT_CACHE := .cache_test_patch
 
 include ../graft.mk
 
@@ -11,14 +11,14 @@ PATCH_CONTENT := --- old/miniz/miniz.h\n+++ new/miniz/miniz.h\n@@ -1,3 +1,4 @@\n
 # Use a small repo and apply a patch
 MINIZ_DIR     := $b/miniz
 MINIZ_TGT     := $(MINIZ_DIR)/miniz.h
-MINIZ_TAR     := $(DL)/miniz_3.0.2.tar.gz
+MINIZ_TAR     := $(GRAFT_CACHE)/miniz_3.0.2.tar.gz
 MINIZ_TMP     := /tmp/graft_test_patch_miniz
 MINIZ_COMMIT  := 3.0.2
 MINIZ_GIT_URL := https://github.com/richgel999/miniz.git
 MINIZ_PATCH   := test_patch.patch
 $(eval $(call GRAFT_FETCH,MINIZ))
 
-DIRS := $b $(DL) $(MINIZ_DIR)
+DIRS := $b $(GRAFT_CACHE) $(MINIZ_DIR)
 $(foreach V,$(sort $(DIRS)),$(eval $(call GRAFT_MK_DIR,$V)))
 
 # Create patch file before running

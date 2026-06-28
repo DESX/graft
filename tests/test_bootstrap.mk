@@ -1,6 +1,6 @@
 # Test: self-bootstrapping graft — one-line shallow clone of a ref, then include.
 b := build_test_bootstrap
-DL := .cache_test_bootstrap
+GRAFT_CACHE := .cache_test_bootstrap
 
 # Bootstrap from the local graft checkout so the test runs offline and without
 # depending on a release tag being pushed yet. `main` always exists locally; the

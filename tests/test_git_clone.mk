@@ -1,19 +1,19 @@
 # Test: GIT_URL clone and cache
 b := build_test_git_clone
-DL := .cache_test_git_clone
+GRAFT_CACHE := .cache_test_git_clone
 
 include ../graft.mk
 
 # Use a small, stable repo
 MINIZ_DIR    := $b/miniz
 MINIZ_TGT    := $(MINIZ_DIR)/miniz.h
-MINIZ_TAR    := $(DL)/miniz_3.0.2.tar.gz
+MINIZ_TAR    := $(GRAFT_CACHE)/miniz_3.0.2.tar.gz
 MINIZ_TMP    := /tmp/graft_test_miniz
 MINIZ_COMMIT := 3.0.2
 MINIZ_GIT_URL := https://github.com/richgel999/miniz.git
 $(eval $(call GRAFT_FETCH,MINIZ))
 
-DIRS := $b $(DL) $(MINIZ_DIR)
+DIRS := $b $(GRAFT_CACHE) $(MINIZ_DIR)
 $(foreach V,$(sort $(DIRS)),$(eval $(call GRAFT_MK_DIR,$V)))
 
 .PHONY: test

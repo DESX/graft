@@ -1,5 +1,5 @@
 b := build
-DL := .cache
+GRAFT_CACHE ?= .cache
 PORT := 8080
 
 include ../../graft.mk
@@ -7,11 +7,11 @@ include ../../graft.mk
 # ── Dependency: devd (live-reload static server) ──
 DEVD_DIR     := $b/devd
 DEVD_TGT     := $(DEVD_DIR)/devd
-DEVD_TAR     := $(DL)/devd-0.9-linux64.tgz
+DEVD_TAR     := $(GRAFT_CACHE)/devd-0.9-linux64.tgz
 DEVD_TAR_URL := https://github.com/cortesi/devd/releases/download/v0.9/devd-0.9-linux64.tgz
 $(eval $(call GRAFT_FETCH,DEVD))
 
-DIRS := $b $(DL) $(DEVD_DIR)
+DIRS := $b $(GRAFT_CACHE) $(DEVD_DIR)
 $(foreach V,$(sort $(DIRS)),$(eval $(call GRAFT_MK_DIR,$V)))
 
 # ── Server: devd watches build/site for changes and live-reloads the browser ──
@@ -66,4 +66,4 @@ open:
 	@$(OPEN) http://localhost:$(PORT) 2>/dev/null || true
 
 clean: stop
-	rm -rf $b $(DL)
+	rm -rf $b $(GRAFT_CACHE)

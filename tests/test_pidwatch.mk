@@ -1,9 +1,9 @@
 b := build_test_pidwatch
-DL := .cache_test_pidwatch
+GRAFT_CACHE := .cache_test_pidwatch
 
 include ../graft.mk
 
-DIRS := $b $(DL)
+DIRS := $b $(GRAFT_CACHE)
 $(foreach V,$(sort $(DIRS)),$(eval $(call GRAFT_MK_DIR,$V)))
 
 # Use sleep as a test service

@@ -6,17 +6,17 @@
 # archive stores them. The miniz release zip is flat (miniz.h at the top), so
 # the target sits directly under MINIZ_DIR.
 b := build_test_zip_download
-DL := .cache_test_zip_download
+GRAFT_CACHE := .cache_test_zip_download
 
 include ../graft.mk
 
 MINIZ_DIR     := $b/miniz
 MINIZ_TGT     := $(MINIZ_DIR)/miniz.h
-MINIZ_TAR     := $(DL)/miniz-3.0.2.zip
+MINIZ_TAR     := $(GRAFT_CACHE)/miniz-3.0.2.zip
 MINIZ_ZIP_URL := https://github.com/richgel999/miniz/releases/download/3.0.2/miniz-3.0.2.zip
 $(eval $(call GRAFT_FETCH,MINIZ))
 
-DIRS := $b $(DL) $(MINIZ_DIR)
+DIRS := $b $(GRAFT_CACHE) $(MINIZ_DIR)
 $(foreach V,$(sort $(DIRS)),$(eval $(call GRAFT_MK_DIR,$V)))
 
 # Gate the whole test at parse time: with no unzip, never build the zip target.

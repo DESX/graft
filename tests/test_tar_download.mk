@@ -1,17 +1,17 @@
 # Test: TAR_URL download and extraction
 b := build_test_tar_download
-DL := .cache_test_tar_download
+GRAFT_CACHE := .cache_test_tar_download
 
 include ../graft.mk
 
 # Use a small, stable tarball (jq release - ~1MB)
 JQ_DIR     := $b/jq
 JQ_TGT     := $(JQ_DIR)/README.md
-JQ_TAR     := $(DL)/jq-1.7.1.tar.gz
+JQ_TAR     := $(GRAFT_CACHE)/jq-1.7.1.tar.gz
 JQ_TAR_URL := https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-1.7.1.tar.gz
 $(eval $(call GRAFT_FETCH,JQ))
 
-DIRS := $b $(DL) $(JQ_DIR)
+DIRS := $b $(GRAFT_CACHE) $(JQ_DIR)
 $(foreach V,$(sort $(DIRS)),$(eval $(call GRAFT_MK_DIR,$V)))
 
 .PHONY: test

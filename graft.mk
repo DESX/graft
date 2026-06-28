@@ -2,8 +2,11 @@
 # MIT License
 #
 # Before including, set:
-#   b    output directory (e.g. build)
-#   DL   download cache  (e.g. .cache)
+#   b             output directory (e.g. build); holds generated output, safe to clean
+#   GRAFT_CACHE   download cache (e.g. .cache); holds fetched archives/files, meant to
+#                 outlive `make clean`. Use ?= so it can point at a shared/relocated
+#                 cache. All cache paths are relative to it, so the cache dir can be
+#                 moved or copied between machines without breaking a rebuild.
 #
 # Design rule: every macro below only READS variables of the form NAME_FIELD
 # that the caller has already defined. Graft never invents defaults, so
@@ -14,7 +17,7 @@
 #   Fetches and extracts a dependency. Reads ($1 = NAME, uppercase):
 #     $1_DIR          install dir                                   [required]
 #     $1_TGT          existence probe path                          [required]
-#     $1_TAR          cached archive path  [default $(DL)/<name>-<ver>.tar.gz]
+#     $1_TAR          cached archive path  [default $(GRAFT_CACHE)/<name>-<ver>.tar.gz]
 #     One of:
 #       $1_TAR_URL    tarball URL
 #       $1_ZIP_URL    zip URL (extracted with unzip)
@@ -26,17 +29,17 @@
 #     $1_POST_UNPACK  shell hook after extraction                  [optional]
 #     $1_PATCH        unified diff applied after extraction        [optional]
 #     $1_OVERLAY      dir whose files are symlinked over $1_DIR    [optional]
-#   Caller must also add $($1_DIR) and $(DL) to DIRS.
+#   Caller must also add $($1_DIR) and $(GRAFT_CACHE) to DIRS.
 #   Generates: name_tgt (phony → $1_TGT), name_patch (if $1_PATCH set).
 #
 # ─── GRAFT_FETCH_FILE(NAME) ─────────────────────────────────────────────────
 #   Fetches a single file (no archive, no extraction). Reads:
 #     $1_TGT          install path for the file                     [required]
 #     $1_URL          source URL                                    [required]
-#     $1_FILE         cached download path     [default $(DL)/<name>-<ver>]
+#     $1_FILE         cached download path     [default $(GRAFT_CACHE)/<name>-<ver>]
 #     $1_EXTRA        extra prereqs of the download                 [optional]
 #     $1_POST_FETCH   shell hook after the file is installed        [optional]
-#   Caller must add $(DL) to DIRS; the install dir is created automatically.
+#   Caller must add $(GRAFT_CACHE) to DIRS; the install dir is created automatically.
 #   Generates: name_tgt (phony → $1_TGT).
 #
 # ─── GRAFT_DAEMON(NAME) ───────────────────────────────────────────────────────────
@@ -96,22 +99,22 @@ $(eval _n := $(call GRAFT_LOWER,$1))
 # version bump fetches a fresh archive and re-extracts instead of silently
 # reusing the stale cached one. TMP is scratch space for the git clone.
 $(if $($1_GIT_URL),$(if $($1_TMP),,$(eval $1_TMP := /tmp/graft_$(_n))))
-$(if $($1_TAR),,$(eval $1_TAR := $(DL)/$(_n)-$(call GRAFT_VTOKEN,$1).tar.gz))
+$(if $($1_TAR),,$(eval $1_TAR := $(GRAFT_CACHE)/$(_n)-$(call GRAFT_VTOKEN,$1).tar.gz))
 $(call GRAFT_REQUIRE,$1,DIR TGT TAR)
 $(if $($1_GIT_URL),$(call GRAFT_REQUIRE,$1,COMMIT TMP))
 
 ifneq ($($1_TAR_URL),)
-$($1_TAR): | $(DL) $($1_EXTRA)
+$($1_TAR): | $(GRAFT_CACHE) $($1_EXTRA)
 	curl -L $($1_TAR_URL) > $$@
 endif
 
 ifneq ($($1_ZIP_URL),)
-$($1_TAR): | $(DL) $($1_EXTRA)
+$($1_TAR): | $(GRAFT_CACHE) $($1_EXTRA)
 	curl -L $($1_ZIP_URL) > $$@
 endif
 
 ifneq ($($1_GIT_URL),)
-$($1_TAR): | $(DL) $($1_EXTRA)
+$($1_TAR): | $(GRAFT_CACHE) $($1_EXTRA)
 	rm -rf $($1_TMP) && mkdir -p $($1_TMP)
 	git -C $($1_TMP) init -q
 	git -C $($1_TMP) remote add origin $($1_GIT_URL)
@@ -178,10 +181,10 @@ define GRAFT_FETCH_FILE
 $(eval _n := $(call GRAFT_LOWER,$1))
 # FILE is the versioned cache path (default); it carries a hash of the URL so a
 # version bump downloads afresh and re-installs instead of reusing the stale one.
-$(if $($1_FILE),,$(eval $1_FILE := $(DL)/$(_n)-$(call GRAFT_VTOKEN,$1)))
+$(if $($1_FILE),,$(eval $1_FILE := $(GRAFT_CACHE)/$(_n)-$(call GRAFT_VTOKEN,$1)))
 $(call GRAFT_REQUIRE,$1,TGT URL FILE)
 
-$($1_FILE): | $(DL) $($1_EXTRA)
+$($1_FILE): | $(GRAFT_CACHE) $($1_EXTRA)
 	curl -L $($1_URL) > $$@
 
 # FILE is a normal prerequisite so a freshly downloaded version re-installs over

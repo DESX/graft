@@ -5,7 +5,7 @@
 # POST_UNPACK runs AFTER extraction into the install dir (DIR). This test proves
 # both placements by leaving a marker from each and checking where it lands.
 b := build_test_hooks
-DL := .cache_test_hooks
+GRAFT_CACHE := .cache_test_hooks
 
 include ../graft.mk
 
@@ -18,7 +18,7 @@ MINIZ_PRE_UNPACK   = echo pre  > $(MINIZ_TMP)/pre_marker.txt
 MINIZ_POST_UNPACK  = echo post > $(abspath $(MINIZ_DIR))/post_marker.txt
 $(eval $(call GRAFT_FETCH,MINIZ))
 
-DIRS := $b $(DL) $(MINIZ_DIR)
+DIRS := $b $(GRAFT_CACHE) $(MINIZ_DIR)
 $(foreach V,$(sort $(DIRS)),$(eval $(call GRAFT_MK_DIR,$V)))
 
 .PHONY: test

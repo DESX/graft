@@ -8,7 +8,7 @@
 # silently wiping — the in-place edit it is supposed to capture. Before the fix,
 # this produced an empty patch and lost the edit.
 b := build_test_patch_robust
-DL := .cache_test_patch_robust
+GRAFT_CACHE := .cache_test_patch_robust
 
 include ../graft.mk
 
@@ -20,7 +20,7 @@ MINIZ_GIT_URL := https://github.com/richgel999/miniz.git
 MINIZ_PATCH   := $b/patches/miniz.patch
 $(eval $(call GRAFT_FETCH,MINIZ))
 
-DIRS := $b $(DL) $(MINIZ_DIR)
+DIRS := $b $(GRAFT_CACHE) $(MINIZ_DIR)
 $(foreach V,$(sort $(DIRS)),$(eval $(call GRAFT_MK_DIR,$V)))
 
 EDIT := EDIT SURVIVES CACHE WIPE
@@ -33,7 +33,7 @@ test: | $b
 	@echo "  build + in-place edit: OK"
 
 	@# ── Clean the download cache, THEN generate the patch ──
-	@rm -rf $(DL)
+	@rm -rf $(GRAFT_CACHE)
 	@$(MAKE) -s -f test_patch_robust.mk miniz_patch
 	@# The edit must survive in the install dir (not re-extracted away)...
 	@grep -q "$(EDIT)" $(MINIZ_DIR)/miniz.h \

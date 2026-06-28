@@ -7,7 +7,7 @@
 # - Tool: CMake (downloaded, used to build other libraries)
 
 b := bin
-DL := .cache
+GRAFT_CACHE ?= .cache
 
 MAKEFLAGS := -j 8
 
@@ -21,7 +21,7 @@ include ../../graft.mk
 define LIB_VARS
 $1_DIR := $b/$(call GRAFT_LOWER,$1)
 $1_TGT := $$($1_DIR)/$(or $2,README.md)
-$1_TAR := $(DL)/$(call GRAFT_LOWER,$1).tar.gz
+$1_TAR := $(GRAFT_CACHE)/$(call GRAFT_LOWER,$1).tar.gz
 $1_TMP := /tmp/graft_$(call GRAFT_LOWER,$1)
 endef
 
@@ -144,8 +144,8 @@ clean:
 	rm -rf $b
 
 clean-all:
-	rm -rf $b $(DL)
+	rm -rf $b $(GRAFT_CACHE)
 
-DIRS := $b $(DL) $(CMAKE_DIR) $(AU_DIR) $(JSON_DIR) $(FMT_DIR) \
+DIRS := $b $(GRAFT_CACHE) $(CMAKE_DIR) $(AU_DIR) $(JSON_DIR) $(FMT_DIR) \
         $(CATCH2_DIR) $(YAMLCPP_DIR) $(SQLITECPP_DIR) $(HTTPLIB_DIR)
 $(foreach V,$(sort $(DIRS)),$(eval $(call GRAFT_MK_DIR,$V)))

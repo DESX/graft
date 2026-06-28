@@ -5,7 +5,7 @@
 # that tag points at — and assert the extracted header is byte-identical, which
 # proves the SHA path resolves to the same source as the tag path.
 b := build_test_git_ref
-DL := .cache_test_git_ref
+GRAFT_CACHE := .cache_test_git_ref
 
 include ../graft.mk
 
@@ -26,7 +26,7 @@ PINNED_COMMIT  := $(GITREF_SHA)
 PINNED_GIT_URL := https://github.com/richgel999/miniz.git
 $(eval $(call GRAFT_FETCH,PINNED))
 
-DIRS := $b $(DL) $(TAGGED_DIR) $(PINNED_DIR)
+DIRS := $b $(GRAFT_CACHE) $(TAGGED_DIR) $(PINNED_DIR)
 $(foreach V,$(sort $(DIRS)),$(eval $(call GRAFT_MK_DIR,$V)))
 
 .PHONY: test

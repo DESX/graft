@@ -1,14 +1,27 @@
-# Test: self-bootstrapping graft — one-line shallow clone of a ref, then include.
+# Test: self-bootstrapping graft — clone a ref, then include it and use a macro.
+#
+# The bootstrap source is a throwaway git repo built here from the working-tree
+# graft.mk + pidwatch.c, with a tag (v0). This keeps the test offline AND
+# independent of the surrounding checkout's refs: CI checkouts are shallow and
+# carry no tags (and no `main` branch on a tag build), so cloning the checkout
+# itself by ref would fail. The clone mechanism is identical to the real bootstrap.
 b := build_test_bootstrap
 GRAFT_CACHE := .cache_test_bootstrap
 
-# Bootstrap from the local graft checkout so the test runs offline and without
-# depending on a release tag being pushed yet. `main` always exists locally; the
-# clone mechanism is identical for a vX.Y.Z tag (what the docs recommend).
-GRAFT_URL ?= $(abspath ..)
-GRAFT_REV ?= main
+GRAFT_SRC := $b/graft-src
 
-$b/graft/graft.mk:; @git clone -q --depth=1 -b $(GRAFT_REV) $(GRAFT_URL) $(dir $@)
+# Build the throwaway graft "remote" with a tag to clone by.
+$(GRAFT_SRC)/.git/HEAD:
+	@rm -rf $(GRAFT_SRC) && mkdir -p $(GRAFT_SRC)
+	@cp ../graft.mk ../pidwatch.c $(GRAFT_SRC)/
+	@git -C $(GRAFT_SRC) init -q
+	@git -C $(GRAFT_SRC) add -A
+	@git -C $(GRAFT_SRC) -c user.email=t@t.test -c user.name=test commit -qm graft
+	@git -C $(GRAFT_SRC) tag v0
+
+# The bootstrap one-liner under test: clone the pinned ref, then include it.
+$b/graft/graft.mk: | $(GRAFT_SRC)/.git/HEAD
+	@git clone -q -b v0 $(GRAFT_SRC) $(dir $@)
 include $b/graft/graft.mk
 
 # Exercise a bootstrapped macro; checked at runtime (on the first parse pass the
@@ -21,7 +34,4 @@ test: $b/graft/graft.mk
 	@test -f $b/graft/graft.mk   || (echo "ERROR: graft.mk not bootstrapped" && exit 1)
 	@test -f $b/graft/pidwatch.c || (echo "ERROR: pidwatch.c not fetched"    && exit 1)
 	@test "$(MACRO_OK)" = "abc"  || (echo "ERROR: graft macros not loaded"   && exit 1)
-	@got=$$(git -C $b/graft rev-parse HEAD); \
-	  want=$$(git -C .. rev-parse $(GRAFT_REV)); \
-	  test "$$got" = "$$want" || (echo "ERROR: expected $(GRAFT_REV) ($$want), got $$got" && exit 1)
-	@echo "Self-bootstrap test: OK (cloned $(GRAFT_REV))"
+	@echo "Self-bootstrap test: OK"

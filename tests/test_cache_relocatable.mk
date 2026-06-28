@@ -14,13 +14,13 @@ include ../graft.mk
 # One of each fetch mechanism: git (cache key = commit), tarball (key = URL hash),
 # and a single file. All use graft's default cache paths under $(GRAFT_CACHE).
 MINIZ_DIR     := $b/miniz
-MINIZ_TGT     := $(MINIZ_DIR)/miniz.h
+MINIZ_TGT     := miniz.h
 MINIZ_COMMIT  := 3.0.2
 MINIZ_GIT_URL := https://github.com/richgel999/miniz.git
 $(eval $(call GRAFT_FETCH,MINIZ))
 
 JQ_DIR     := $b/jq
-JQ_TGT     := $(JQ_DIR)/README.md
+JQ_TGT     := README.md
 JQ_TAR_URL := https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-1.7.1.tar.gz
 $(eval $(call GRAFT_FETCH,JQ))
 
@@ -45,8 +45,9 @@ test: | $b
 	@rm -rf $(MOVED) && cp -r $(GRAFT_CACHE) $(MOVED) && rm -rf $(GRAFT_CACHE) $b
 	@echo "  move $(GRAFT_CACHE) -> $(MOVED), clean build tree: OK"
 
-	@# ── 3. Rebuild from the moved cache with all network blocked ──
-	@$(OFFLINE) $(MAKE) -s -f test_cache_relocatable.mk GRAFT_CACHE=$(MOVED) $(TARGETS) \
+	@# ── 3. Rebuild from the moved cache, pointing at it via the GRAFT_CACHE env
+	@#       var (the makefile uses ?=, so the environment wins), network blocked ──
+	@$(OFFLINE) GRAFT_CACHE=$(MOVED) $(MAKE) -s -f test_cache_relocatable.mk $(TARGETS) \
 	  || { echo "ERROR: rebuild from relocated cache reached the network" && rm -rf $(MOVED) && exit 1; }
 	@test -f $(MINIZ_DIR)/miniz.h || { echo "ERROR: git dep missing after relocation"  && rm -rf $(MOVED) && exit 1; }
 	@test -f $(JQ_DIR)/README.md  || { echo "ERROR: tar dep missing after relocation"  && rm -rf $(MOVED) && exit 1; }

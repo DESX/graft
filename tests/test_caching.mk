@@ -5,8 +5,7 @@ GRAFT_CACHE := .cache_test_caching
 include ../graft.mk
 
 MINIZ_DIR     := $b/miniz
-MINIZ_TGT     := $(MINIZ_DIR)/miniz.h
-MINIZ_TAR     := $(GRAFT_CACHE)/miniz_3.0.2.tar.gz
+MINIZ_TGT     := miniz.h
 MINIZ_TMP     := /tmp/graft_test_caching_miniz
 MINIZ_COMMIT  := 3.0.2
 MINIZ_GIT_URL := https://github.com/richgel999/miniz.git

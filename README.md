@@ -9,6 +9,7 @@ process supervisor.
 - [Self-bootstrapping](#self-bootstrapping): clone graft on first build, nothing to copy into your repo.
 - [Fetching a dependency](#fetching-a-dependency): download or clone, cache, and extract a source tree from a git repo, tarball, or zip.
 - [Versioned caching](#versioned-caching): bump a version and graft re-fetches; leave it and nothing re-downloads.
+- [Pinning a hash](#pinning-a-hash): verify any download against `NAME_SHA256`; set it empty and the build prints the hash to pin.
 - [Build hooks](#build-hooks-pre_unpack--post_unpack): run a configure or compile step while fetching (`PRE_UNPACK` / `POST_UNPACK`).
 - [Ordering dependencies](#ordering-dependencies): make one dependency build before another (`EXTRA`).
 - [Patching a dependency](#patching-a-dependency): change existing upstream files, captured as a tracked diff.
@@ -44,7 +45,7 @@ clones graft when the include is missing, then `include` it. On a fresh checkout
 is no separate setup step:
 
 ```makefile
-GRAFT_VER ?= v1.7.0
+GRAFT_VER ?= v1.8.0
 .cache/graft-$(GRAFT_VER)/graft.mk:; @git clone -q --depth=1 -b $(GRAFT_VER) https://github.com/DESX/graft.git $(dir $@)
 include .cache/graft-$(GRAFT_VER)/graft.mk
 ```
@@ -80,9 +81,19 @@ rebuild still works with no re-downloading.
 ## Fetching a dependency
 
 `GRAFT_FETCH` downloads an archive (or clones a git repo), caches it, and extracts
-it into a directory you choose. Set the `NAME_*` variables, call the macro, then
-add the install dir and cache dir to `DIRS`. `NAME_TGT` is any file that exists
-once extraction succeeds, and your build rules depend on it.
+it into a version-stamped install dir. Set the `NAME_*` variables, call the macro,
+then add the install dir and cache dir to `DIRS`. `NAME_TGT` is an existence probe
+given **relative to the install dir** — any file that exists once extraction
+succeeds; graft makes it absolute, and your build rules depend on it.
+
+`NAME_DIR` (install dir, defaults to `$b/<name>-<version>`), `NAME_TAR` (cache
+path), and `NAME_TMP` (clone scratch) all default, so a dependency needs only its
+probe target and source. Both `NAME_DIR` and the resolved `NAME_TGT` are set by the
+call, so you can reference them afterward. **Bumping the version is all it takes:**
+because the install dir and cache file both carry the version, changing
+`NAME_COMMIT` (or a URL) re-downloads into a fresh dir and re-extracts cleanly, then
+everything that depends on `NAME_DIR` / `NAME_TGT` rebuilds — old versions are left
+in place, and switching back reuses them. No stale files, no manual cleaning.
 
 The source is exactly one of `NAME_GIT_URL`, `NAME_TAR_URL`, or `NAME_ZIP_URL`.
 
@@ -90,18 +101,16 @@ The source is exactly one of `NAME_GIT_URL`, `NAME_TAR_URL`, or `NAME_ZIP_URL`.
 
 Set `NAME_GIT_URL` and `NAME_COMMIT`. `NAME_COMMIT` may be a **tag, a branch, or a
 full commit SHA** (short SHAs are not supported, since the clone is a shallow fetch
-of that one ref). `NAME_TAR` (cache path) and `NAME_TMP` (clone scratch dir) both
-default, so a git dependency needs only four lines:
+of that one ref):
 
 ```makefile
 b  := build
 GRAFT_CACHE ?= .cache
 
-FMT_DIR     := $b/fmt
-FMT_TGT     := $(FMT_DIR)/README.md
-FMT_COMMIT  := 11.0.2                                   # tag, branch, or full SHA
+FMT_TGT     := README.md                               # probe, relative to FMT_DIR
+FMT_COMMIT  := 11.0.2                                  # tag, branch, or full SHA
 FMT_GIT_URL := https://github.com/fmtlib/fmt.git
-$(eval $(call GRAFT_FETCH,FMT))
+$(eval $(call GRAFT_FETCH,FMT))                        # FMT_DIR := build/fmt-11.0.2
 
 DIRS := $b $(GRAFT_CACHE) $(FMT_DIR)
 $(foreach d,$(sort $(DIRS)),$(eval $(call GRAFT_MK_DIR,$d)))
@@ -114,8 +123,7 @@ stripping the leading directory (`--strip-components=1`), so its contents land
 directly in `NAME_DIR`:
 
 ```makefile
-JQ_DIR     := $b/jq
-JQ_TGT     := $(JQ_DIR)/README.md
+JQ_TGT     := README.md
 JQ_TAR_URL := https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-1.7.1.tar.gz
 $(eval $(call GRAFT_FETCH,JQ))
 ```
@@ -127,37 +135,67 @@ strip a leading directory; files land exactly as the archive stores them, so poi
 `NAME_TGT` at the real path inside the zip:
 
 ```makefile
-MINIZ_DIR     := $b/miniz
-MINIZ_TGT     := $(MINIZ_DIR)/miniz.h        # flat zip: header sits at the top level
-MINIZ_TAR     := $(GRAFT_CACHE)/miniz-3.0.2.zip
+MINIZ_TGT     := miniz.h                     # flat zip: header sits at the top level
 MINIZ_ZIP_URL := https://github.com/richgel999/miniz/releases/download/3.0.2/miniz-3.0.2.zip
 $(eval $(call GRAFT_FETCH,MINIZ))
 ```
 
 Downloads use `curl -fL`, so an HTTP error (404, 500) fails the build instead of
-caching the error page, and each archive is written to a temp file renamed into
-place so the cache only ever holds complete files. For tarball and zip sources you
-can set `NAME_SHA256` to the expected hash; graft verifies the download and fails
-if it does not match. This is worth doing for URL sources, which — unlike a git
-`NAME_COMMIT` — are not self-pinning:
+caching the error page, and each archive is written to a temp file before being
+committed to the cache, so the cache only ever holds complete files.
+
+### Pinning a hash
+
+`NAME_SHA256` works for **every** source type — git, tarball, zip, and single file.
+Set it and graft verifies the fetched bytes and fails the build on a mismatch:
 
 ```makefile
-JQ_SHA256 := <sha256 of jq-1.7.1.tar.gz>    # `sha256sum` the file to get this
+JQ_SHA256 := 5942c9b...    # see the discovery workflow below to get this
 ```
+
+You don't have to compute the hash by hand. Set it **empty** and the build fails
+and prints the value to paste in:
+
+```makefile
+JQ_SHA256 :=
+```
+```
+$ make
+graft: JQ_SHA256 is empty — pin it by adding:
+    JQ_SHA256 := 5942c9b0934e510ee61eb3e30273f1b3fe2590df93933a93d7c58b81d19c8ff5
+```
+
+Copy that line over the empty one and rebuild. Discovery has its own cache key, so
+it prints the hash even if the dependency is already cached — no `make clean`
+needed. (For git, the verified bytes are graft's reproducible archive of the
+checkout; pinning a hash there is most useful for plain-source deps, since a
+`PRE_UNPACK` build step makes the archive non-deterministic — the commit already
+pins those.)
+
+`NAME_SHA256` is also part of the cache key, so changing it re-fetches and
+re-verifies rather than trusting a previously cached file.
 
 ## Versioned caching
 
-The caching is the important part. The cached archive's filename embeds a version
-token: the git commit for a git source, or a hash of the URL for a tarball or zip.
-Bump `NAME_COMMIT` (or the URL) and the filename changes, so graft fetches the new
-version and re-extracts. Leave it alone and nothing re-downloads. Switching back to
-an old version reuses its still-cached archive. No stale checkouts, no manual cache
-busting.
+The caching is the important part. The install dir embeds a human-readable version
+token (`$b/<name>-<version>`), and the **cache** is content-addressed: each file is
+stored as `<keyhash>_<filehash>`, where `keyhash` is a 12-hex hash of the pinned
+commit/version **plus the source URL**, and `filehash` is a 12-hex hash of the
+downloaded bytes. A stable `<keyhash>` symlink is the handle graft builds against.
 
-You normally let `NAME_TAR` default. Set it explicitly only to control the cache
-filename (for example to give a zip a `.zip` name, as above). If you hard-code a
-`NAME_TAR` without a version in it, you opt out of automatic re-fetching, so keep
-the version in the name or leave it to graft.
+Two consequences:
+
+- **Bumping the version is the whole operation.** Change `NAME_COMMIT` (or the URL)
+  and the keyhash and the install dir both change, so graft re-downloads into a
+  fresh dir, re-extracts cleanly, and rebuilds anything that depends on
+  `NAME_DIR`/`NAME_TGT`. Leave it alone and nothing re-downloads. Switch back and
+  graft reuses what it already has. No stale files, no manual cache busting.
+- **The key folds in the URL,** so the same tag or commit pinned across two
+  different repos never collides in the cache, and changing only the URL re-fetches.
+
+Cache files are opaque — they are storage, not meant to be read by name. You
+normally let `NAME_TAR`/`NAME_FILE` (the cache handle) and `NAME_DIR` default; graft
+manages the cache names entirely.
 
 ## Build hooks (PRE_UNPACK / POST_UNPACK)
 
@@ -170,8 +208,7 @@ during the fetch:
 - `NAME_POST_UNPACK` runs after extraction into `NAME_DIR`.
 
 ```makefile
-FMT_DIR       := $b/fmt
-FMT_TGT       := $(FMT_DIR)/README.md
+FMT_TGT       := README.md
 FMT_COMMIT    := 11.0.2
 FMT_GIT_URL   := https://github.com/fmtlib/fmt.git
 FMT_PRE_UNPACK = cmake -S $(FMT_TMP) -B $(FMT_TMP)/build && cmake --build $(FMT_TMP)/build --target fmt
@@ -210,15 +247,17 @@ $(eval $(call GRAFT_FETCH,FMT))
 Say you need to change one line in fmt's `core.h`. The exact sequence:
 
 ```
-make                                # 1. fetch + extract fmt (no patch yet, the file is absent)
-vim build/fmt/include/fmt/core.h    # 2. edit the extracted file in place
-make fmt_patch                      # 3. capture your edits into patches/fmt.patch
-git add patches/fmt.patch           # 4. commit the small diff, not the whole repo
+make                                       # 1. fetch + extract fmt (no patch yet)
+vim build/fmt-11.0.2/include/fmt/core.h    # 2. edit the extracted file in place
+make fmt_patch                             # 3. capture your edits into patches/fmt.patch
+git add patches/fmt.patch                  # 4. commit the small diff, not the whole repo
 ```
 
-From then on, any clean build re-applies `patches/fmt.patch` automatically, so the
-change rides along with a fresh fetch. Re-run `make fmt_patch` whenever you edit
-the files again to refresh the diff.
+The install dir is version-stamped (`$(FMT_DIR)`, here `build/fmt-11.0.2`). From
+then on, any clean build re-applies `patches/fmt.patch` automatically, so the change
+rides along with a fresh fetch — and because graft re-applies it after every
+extraction, it follows you across a version bump too. Re-run `make fmt_patch`
+whenever you edit the files again to refresh the diff.
 
 The order is forgiving: you can add `NAME_PATCH` and run `make fmt_patch` long
 after the first build, and it still works because graft reconstructs the pristine
@@ -245,14 +284,15 @@ Say you want to drop in your own `config.h`. The exact sequence:
 ```
 mkdir -p overlays/fmt/include/fmt
 echo '#define FMT_HEADER_ONLY 1' > overlays/fmt/include/fmt/config.h
-make                                # symlinks it into build/fmt/include/fmt/
-git add overlays/fmt                # the file lives in your repo
+make                                        # symlinks it into $(FMT_DIR)/include/fmt/
+git add overlays/fmt                        # the file lives in your repo
 ```
 
-Every file under `overlays/fmt/` is symlinked into the matching path in
-`build/fmt/`, so it survives a re-fetch. Because it is a symlink, editing
-`build/fmt/include/fmt/config.h` edits your tracked `overlays/fmt/...` copy, and
-the change shows up in `git status` instead of being lost in the build tree.
+Every file under `overlays/fmt/` is symlinked into the matching path in the
+install dir (`$(FMT_DIR)`, e.g. `build/fmt-11.0.2/`), so it survives a re-fetch.
+Because it is a symlink, editing the file in the build tree edits your tracked
+`overlays/fmt/...` copy, and the change shows up in `git status` instead of being
+lost in the build tree.
 Overlay files are excluded from generated patches, so patch and overlay compose
 cleanly on the same dependency.
 
@@ -343,13 +383,18 @@ cd tests && make
 ```
 
 The suite covers each documented sequence: git fetch by tag and by commit SHA,
-tarball and zip extraction, versioned caching and re-fetch on a bump, the patch and
-overlay workflows (including patch generation after the cache is cleaned),
-single-file fetch, the optional `NAME_SHA256` integrity check, dependency ordering,
-the build hooks, self-bootstrap, and the process supervisor. It also checks that the
-cache is relocatable (move it, then rebuild offline with the network blocked) and
-that the versioned bootstrap coexists across versions. The zip test skips itself
-when `unzip` is not installed.
+tarball and zip extraction, versioned caching and re-fetch on a bump, the
+content-addressed cache key (including the same-tag-different-URL no-collision
+case), cache consistency across version/commit/SHA changes with no `make clean`
+(fresh entry per input, old ones intact, switch-back reuse), the `NAME_SHA256`
+integrity check and the empty-SHA discovery workflow for both file and git sources
+(which also proves git archives are byte-reproducible), the patch and overlay
+workflows (including patch generation after the cache is cleaned), single-file
+fetch, dependency ordering, the build hooks, self-bootstrap, and the process
+supervisor. It also checks that the cache is relocatable — populate it, move it, and
+rebuild offline (network blocked) pointing at the new path via the `GRAFT_CACHE`
+environment variable — and that the versioned bootstrap coexists across versions.
+The zip test skips itself when `unzip` is not installed.
 
 ## License
 

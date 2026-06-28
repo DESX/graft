@@ -6,8 +6,7 @@ include ../../graft.mk
 
 # ── Dependency: devd (live-reload static server) ──
 DEVD_DIR     := $b/devd
-DEVD_TGT     := $(DEVD_DIR)/devd
-DEVD_TAR     := $(GRAFT_CACHE)/devd-0.9-linux64.tgz
+DEVD_TGT     := devd
 DEVD_TAR_URL := https://github.com/cortesi/devd/releases/download/v0.9/devd-0.9-linux64.tgz
 $(eval $(call GRAFT_FETCH,DEVD))
 

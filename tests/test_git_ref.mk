@@ -14,14 +14,14 @@ GITREF_SHA := a4264837ae37384b1d7a205a6732db322f0f3769
 
 # ── by tag ──
 TAGGED_DIR     := $b/tagged
-TAGGED_TGT     := $(TAGGED_DIR)/miniz.h
+TAGGED_TGT     := miniz.h
 TAGGED_COMMIT  := 2.1.0
 TAGGED_GIT_URL := https://github.com/richgel999/miniz.git
 $(eval $(call GRAFT_FETCH,TAGGED))
 
 # ── by raw commit SHA ──
 PINNED_DIR     := $b/pinned
-PINNED_TGT     := $(PINNED_DIR)/miniz.h
+PINNED_TGT     := miniz.h
 PINNED_COMMIT  := $(GITREF_SHA)
 PINNED_GIT_URL := https://github.com/richgel999/miniz.git
 $(eval $(call GRAFT_FETCH,PINNED))

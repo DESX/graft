@@ -7,8 +7,7 @@ include ../graft.mk
 
 # First dependency (will be built first)
 MINIZ_DIR     := $b/miniz
-MINIZ_TGT     := $(MINIZ_DIR)/miniz.h
-MINIZ_TAR     := $(GRAFT_CACHE)/miniz_3.0.2.tar.gz
+MINIZ_TGT     := miniz.h
 MINIZ_TMP     := /tmp/graft_test_deps_miniz
 MINIZ_COMMIT  := 3.0.2
 MINIZ_GIT_URL := https://github.com/richgel999/miniz.git
@@ -17,8 +16,7 @@ $(eval $(call GRAFT_FETCH,MINIZ))
 
 # Second dependency depends on first via EXTRA
 TINYEXPR_DIR     := $b/tinyexpr
-TINYEXPR_TGT     := $(TINYEXPR_DIR)/tinyexpr.h
-TINYEXPR_TAR     := $(GRAFT_CACHE)/tinyexpr_master.tar.gz
+TINYEXPR_TGT     := tinyexpr.h
 TINYEXPR_TMP     := /tmp/graft_test_deps_tinyexpr
 TINYEXPR_COMMIT  := master
 TINYEXPR_GIT_URL := https://github.com/codeplea/tinyexpr.git

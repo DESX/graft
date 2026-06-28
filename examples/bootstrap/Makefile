@@ -23,7 +23,7 @@ GRAFT_CACHE ?= .cache
 .DEFAULT_GOAL := all
 
 GRAFT_URL ?= https://github.com/DESX/graft.git
-GRAFT_VER ?= v1.7.0
+GRAFT_VER ?= v1.8.0
 $(GRAFT_CACHE)/graft-$(GRAFT_VER)/graft.mk:; @git clone -q --depth=1 -b $(GRAFT_VER) $(GRAFT_URL) $(dir $@)
 include $(GRAFT_CACHE)/graft-$(GRAFT_VER)/graft.mk
 
@@ -31,7 +31,7 @@ include $(GRAFT_CACHE)/graft-$(GRAFT_VER)/graft.mk
 # TAR and TMP are left to graft's defaults ($(GRAFT_CACHE)/miniz-3.0.2.tar.gz and
 # $b/graft-tmp/miniz); bumping MINIZ_COMMIT alone re-fetches the new version.
 MINIZ_DIR     := $b/miniz
-MINIZ_TGT     := $(MINIZ_DIR)/miniz.h
+MINIZ_TGT     := miniz.h
 MINIZ_COMMIT  := 3.0.2
 MINIZ_GIT_URL := https://github.com/richgel999/miniz.git
 $(eval $(call GRAFT_FETCH,MINIZ))

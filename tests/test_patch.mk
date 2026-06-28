@@ -10,8 +10,7 @@ PATCH_CONTENT := --- old/miniz/miniz.h\n+++ new/miniz/miniz.h\n@@ -1,3 +1,4 @@\n
 
 # Use a small repo and apply a patch
 MINIZ_DIR     := $b/miniz
-MINIZ_TGT     := $(MINIZ_DIR)/miniz.h
-MINIZ_TAR     := $(GRAFT_CACHE)/miniz_3.0.2.tar.gz
+MINIZ_TGT     := miniz.h
 MINIZ_TMP     := /tmp/graft_test_patch_miniz
 MINIZ_COMMIT  := 3.0.2
 MINIZ_GIT_URL := https://github.com/richgel999/miniz.git

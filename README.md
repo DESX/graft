@@ -1,6 +1,6 @@
 # Graft
 
-[![tests](https://github.com/DESX/graft/actions/workflows/test.yml/badge.svg)](https://github.com/DESX/graft/actions/workflows/test.yml)
+[![tests](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FDESX%2Fgraft%2Fbadges%2Ftests.json)](https://github.com/DESX/graft/actions/workflows/test.yml)
 
 Graft is a library for GNU Makefiles. Include a single `graft.mk` and get macros
 for fetching, caching, patching, and overlaying source dependencies, plus a

@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: write   # push the version badge to the `badges` branch
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -14,6 +17,27 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y make curl git tar unzip patch gcc
+          sudo apt-get install -y make curl git tar unzip patch coreutils gcc
       - name: Run test suite
+        id: tests
         run: make -C tests
+      # Publish a shields.io endpoint badge that names the version that was tested,
+      # e.g. "tests | v1.7.0 passing". Only from main; the badge reflects pass/fail.
+      - name: Publish version badge
+        if: always() && github.ref == 'refs/heads/main'
+        run: |
+          ver=$(git describe --tags --abbrev=0 2>/dev/null || git rev-parse --short HEAD)
+          if [ "${{ steps.tests.outcome }}" = "success" ]; then
+            msg="$ver passing"; color="brightgreen"
+          else
+            msg="$ver failing"; color="red"
+          fi
+          tmp=$(mktemp -d)
+          printf '{"schemaVersion":1,"label":"tests","message":"%s","color":"%s"}\n' \
+            "$msg" "$color" > "$tmp/tests.json"
+          git -C "$tmp" init -q
+          git -C "$tmp" checkout -q -b badges
+          git -C "$tmp" add tests.json
+          git -C "$tmp" -c user.name=ci -c user.email=ci@graft commit -qm "badge: $msg"
+          git -C "$tmp" push -q -f \
+            "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" badges

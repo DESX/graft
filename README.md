@@ -11,6 +11,7 @@ process supervisor.
 - [Versioned caching](#versioned-caching): bump a version and graft re-fetches; leave it and nothing re-downloads.
 - [Pinning a hash](#pinning-a-hash): verify any download against `NAME_SHA256`; set it empty and the build prints the hash to pin.
 - [Build hooks](#build-hooks-pre_unpack--post_unpack): run a configure or compile step while fetching (`PRE_UNPACK` / `POST_UNPACK`).
+- [Building a fetched source](#building-a-fetched-source): unpack, run a command, cache the result as its own entry (`GRAFT_BUILD`).
 - [Ordering dependencies](#ordering-dependencies): make one dependency build before another (`EXTRA`).
 - [Patching a dependency](#patching-a-dependency): change existing upstream files, captured as a tracked diff.
 - [Overlaying files](#overlaying-files): add or replace whole files with your own.
@@ -249,6 +250,34 @@ asserts the build is **reproducible**, failing on another machine with a clear
 "built output differs" message if it isn't (or just working, if that machine pulls
 the artifact from a shared cache). If your build isn't deterministic, leave it
 unpinned.
+
+## Building a fetched source
+
+`PRE_UNPACK` folds the build into the fetch. `GRAFT_BUILD` is the cleaner two-stage
+form: **stage 1** fetches the source with `GRAFT_FETCH` (content-addressed, pinnable
+as a supply-chain input); **stage 2** unpacks that source into a scratch dir, runs a
+command there (which may use the network), and repacks the result as its own cache
+entry:
+
+```makefile
+FMT_SRC_TGT     := README.md
+FMT_SRC_COMMIT  := 11.0.2
+FMT_SRC_GIT_URL := https://github.com/fmtlib/fmt.git
+$(eval $(call GRAFT_FETCH,FMT_SRC))           # stage 1: the source (pinnable)
+
+FMT_SRC2 := FMT_SRC                            # the dep to build
+FMT_TGT  := build/libfmt.a                     # probe inside the built output
+FMT_CMD  := cmake -S . -B build && cmake --build build --target fmt
+$(eval $(call GRAFT_BUILD,FMT))               # stage 2: build it
+```
+
+The build's cache key is the **source's key plus the command**, so you fetch the
+source once and can build it several ways, each its own entry; changing the command
+rebuilds, and a clean rebuild reuses the cached output (the network-dependent build
+runs once). Like any entry, the built output is stored by its hash and you can pin
+`NAME_SHA256` to assert it's reproducible (see [Build hooks](#build-hooks-pre_unpack--post_unpack)).
+The split keeps the source pin (integrity of the input) independent from the build
+pin (reproducibility of the output).
 
 ## Ordering dependencies
 

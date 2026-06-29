@@ -256,6 +256,67 @@ endif
 $(_n)_tgt: $($1_TGT)
 endef
 
+# ── GRAFT_BUILD ───────────────────────────────────────────────────────────────────
+# Builds a fetched source into its own cache entry — the two-stage companion to
+# GRAFT_FETCH: stage 1 fetches the source (content-addressed, pinnable as a
+# supply-chain input); GRAFT_BUILD is stage 2. It unpacks the source into a scratch
+# dir, runs a command there (which MAY use the network), and repacks the result.
+# Reads ($1 = NAME):
+#   $1_SRC          name of a GRAFT_FETCH dependency to build       [required]
+#   $1_CMD          build command, run in the source scratch dir    [required]
+#   $1_TGT          existence probe, relative to DIR                [required]
+#   $1_DIR          install dir                          [default $b/<name>]
+#   $1_TMP          build scratch dir            [default $b/graft-tmp/<name>]
+#   $1_SHA256       expected sha256 of the built output             [optional]
+#                   (pinning it asserts the build is reproducible; empty = discover)
+#   $1_TAR          inspection symlink name                         [optional]
+#   $1_EXTRA $1_POST_UNPACK $1_PATCH $1_OVERLAY                      [optional]
+# The cache key is the source's keyhash + the build command, so the same source
+# built two ways yields two entries and changing the command rebuilds. The built
+# output is non-reproducible by nature; pin $1_SHA256 only if you expect it to be.
+define GRAFT_BUILD
+$(eval _n := $(call GRAFT_LOWER,$1))
+$(call GRAFT_REQUIRE,$1,TGT SRC CMD)
+$(eval $1_SRCKEY := $($($1_SRC)_KEY))
+$(if $($1_SRCKEY),,$(error graft: $1_SRC ('$($1_SRC)') is not a GRAFT_FETCH dependency))
+$(if $($1_DIR),,$(eval $1_DIR := $b/$(_n)))
+$(if $($1_TMP),,$(eval $1_TMP := $b/graft-tmp/$(_n)))
+$(eval $1_KEY := $(GRAFT_CACHE)/key_files/$(shell printf %s 'build|$(notdir $($1_SRCKEY))|$($1_CMD)' | sha256sum | cut -c1-12))
+$(eval $1_VERBOSE := $(if $($1_TAR),$(notdir $($1_TAR)),$1_$(_n).tar.gz))
+$(eval $1_TGT := $($1_DIR)/$($1_TGT))
+
+# build rule: unpack the source, run the command in the scratch dir, repack.
+$($1_KEY): $($1_SRCKEY) | $(GRAFT_CACHE) $($1_EXTRA)
+	rm -rf $($1_TMP) && mkdir -p $($1_TMP)
+	@sh $(GRAFT_SH) unpack-pristine $($1_SRCKEY) $($1_TMP)
+	cd $($1_TMP) && $($1_CMD)
+	@sh $(GRAFT_SH) store-build $$@ $($1_TMP) $1 $($1_VERBOSE) $($1_SRC)
+
+# handle / pinned-rule / extraction — identical to GRAFT_FETCH (built=yes for pins).
+$(eval $1_HANDLE := $(if $(filter-out undefined,$(origin $1_SHA256)),$(if $(strip $($1_SHA256)),$(GRAFT_CACHE)/hash_files/$($1_SHA256),$($1_KEY)),$($1_KEY)))
+$(eval $1_DISC := $(if $(filter-out undefined,$(origin $1_SHA256)),$(if $(strip $($1_SHA256)),,1),))
+ifneq ($(filter-out undefined,$(origin $1_SHA256)),)
+ifneq ($(strip $($1_SHA256)),)
+$($1_HANDLE): $($1_KEY)
+	@sh $(GRAFT_SH) verify $($1_KEY) $($1_SHA256) $1 built
+endif
+endif
+$($1_TGT): $($1_HANDLE) $(if $($1_DISC),GRAFT_FORCE) | $($1_DIR) $($1_KEY)
+	@sh $(GRAFT_SH) extract $($1_KEY) $($1_DIR) tar '$($1_DISC)' $1
+ifneq ($($1_POST_UNPACK),)
+	$($1_POST_UNPACK)
+endif
+ifneq ($($1_PATCH),)
+	if [ -s $($1_PATCH) ]; then patch -p2 -d $($1_DIR) < $($1_PATCH); fi
+endif
+ifneq ($($1_OVERLAY),)
+	$$(call GRAFT_OVERLAY,$($1_OVERLAY),$($1_DIR))
+endif
+
+.PHONY: $(_n)_tgt
+$(_n)_tgt: $($1_TGT)
+endef
+
 # ── GRAFT_DAEMON ──────────────────────────────────────────────────────────────────
 # Optional: $1_STDOUT and $1_STDERR, if set, pidwatch redirects the
 # daemon's stdout/stderr to those file paths (append mode) instead of

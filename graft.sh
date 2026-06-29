@@ -62,6 +62,15 @@ fetch-file) # fetch-file KEYFILE URL NAME VERBOSE
 	_store "$kf" "$part" "$name" "$verbose" \
 		"$(printf '# name=%s\n# file=%s\n# url=%s' "$name" "$verbose" "$url")"
 	;;
+store-build) # store-build KEYFILE TREE NAME VERBOSE SRC  (repack a built tree)
+	kf=$1 tree=$2 name=$3 verbose=$4 src=$5
+	mkdir -p "$GRAFT_CACHE/key_files" "$GRAFT_CACHE/hash_files"
+	part="$kf.part.$$"
+	tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner \
+		-C "$(dirname "$tree")" --exclude='.git*' -cf - "$(basename "$tree")" | gzip -n >"$part"
+	_store "$kf" "$part" "$name" "$verbose" \
+		"$(printf '# name=%s\n# file=%s\n# source=%s\n# built=yes' "$name" "$verbose" "$src")"
+	;;
 verify) # verify KEYFILE SHA NAME BUILT  (SHA empty => discovery)
 	kf=$1 sha=$2 name=$3 built=$4
 	fh=$(head -1 "$kf")

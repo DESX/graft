@@ -24,14 +24,15 @@ $(foreach V,$(sort $(DIRS)),$(eval $(call GRAFT_MK_DIR,$V)))
 
 .PHONY: test
 test: $(A_TGT)
-	@# The cache handle is an opaque 12-hex key under the cache dir.
-	@echo "$(A_TAR)" | grep -qE '/[0-9a-f]{12}$$' || (echo "ERROR: cache handle not a keyhash: '$(A_TAR)'" && exit 1)
-	@# Same commit + different URL => different key (no collision).
-	@test "$(A_TAR)" != "$(B_TAR)" || (echo "ERROR: same commit on different repos collided in cache" && exit 1)
+	@# The keyfile lives under key_files/ and is named by a 12-hex keyhash.
+	@echo "$(A_KEY)" | grep -qE '/key_files/[0-9a-f]{12}$$' || (echo "ERROR: key path wrong: '$(A_KEY)'" && exit 1)
+	@# Same commit + different URL => different keyhash (no collision).
+	@test "$(A_KEY)" != "$(B_KEY)" || (echo "ERROR: same commit on different repos collided in cache" && exit 1)
 	@echo "  url folded into key (no tag/commit collision): OK"
-	@# The stored file is content-addressed <keyhash>_<filehash>, reached via the handle.
-	@test -L $(A_TAR) && test -f $(A_TAR) || (echo "ERROR: cache handle missing or broken" && exit 1)
-	@readlink $(A_TAR) | grep -qE '^[0-9a-f]{12}_[0-9a-f]{12}$$' \
-	  || (echo "ERROR: cache file not content-addressed: '$$(readlink $(A_TAR))'" && exit 1)
-	@echo "  content-addressed <keyhash>_<filehash>: OK"
+	@# The keyfile's first line is the full sha256 of the content, which is stored in
+	@# hash_files/ named by exactly that hash (pure content-addressing).
+	@fh=$$(head -1 $(A_KEY)); \
+	  echo "$$fh" | grep -qE '^[0-9a-f]{64}$$' || (echo "ERROR: keyfile line 1 not a full sha256: '$$fh'" && exit 1); \
+	  test -f $(GRAFT_CACHE)/hash_files/$$fh || (echo "ERROR: content file hash_files/$$fh missing" && exit 1)
+	@echo "  content stored as hash_files/<full-sha256>: OK"
 	@echo "Cache key test: OK"

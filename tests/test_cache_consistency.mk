@@ -22,7 +22,7 @@ test: | $b
 	@# 1. version 3.0.2 → one entry + its dir.
 	@$(MAKE) -s -f test_cache_consistency.mk VER=3.0.2 $b/miniz-3.0.2/miniz.h
 	@test -f $b/miniz-3.0.2/miniz.h || (echo "ERROR: 3.0.2 not built" && exit 1)
-	@N=$$(ls $(GRAFT_CACHE) | grep -cE '^[0-9a-f]{12}_[0-9a-f]{12}$$'); \
+	@N=$$(ls $(GRAFT_CACHE)/hash_files | grep -cE '^[0-9a-f]{64}$$'); \
 	  test "$$N" = 1 || (echo "ERROR: expected 1 cache entry, have $$N" && exit 1)
 	@echo "  build 3.0.2: OK"
 
@@ -30,22 +30,23 @@ test: | $b
 	@$(MAKE) -s -f test_cache_consistency.mk VER=2.1.0 $b/miniz-2.1.0/miniz.h
 	@test -f $b/miniz-2.1.0/miniz.h && test -d $b/miniz-3.0.2 \
 	  || (echo "ERROR: version change clobbered the old dir" && exit 1)
-	@N=$$(ls $(GRAFT_CACHE) | grep -cE '^[0-9a-f]{12}_[0-9a-f]{12}$$'); \
+	@N=$$(ls $(GRAFT_CACHE)/hash_files | grep -cE '^[0-9a-f]{64}$$'); \
 	  test "$$N" = 2 || (echo "ERROR: expected 2 entries after bump, have $$N" && exit 1)
 	@echo "  change version (no clean): fresh entry, old kept: OK"
 
 	@# 3. switch back to 3.0.2 (no make clean): reuse, no new entry/download.
 	@$(MAKE) -s -f test_cache_consistency.mk VER=3.0.2 $b/miniz-3.0.2/miniz.h
-	@N=$$(ls $(GRAFT_CACHE) | grep -cE '^[0-9a-f]{12}_[0-9a-f]{12}$$'); \
+	@N=$$(ls $(GRAFT_CACHE)/hash_files | grep -cE '^[0-9a-f]{64}$$'); \
 	  test "$$N" = 2 || (echo "ERROR: switch-back re-downloaded (entries now $$N)" && exit 1)
 	@echo "  switch back: reused, no re-download: OK"
 
-	@# 4. change the expected SHA at the same version (discover then pin): a distinct
-	@#    key, so it re-fetches+verifies into its own entry instead of blind reuse.
+	@# 4. discover the hash, then pin it (same version, no make clean): free — the
+	@#    content is already stored by its own hash, so no new entry and no re-download.
 	@H=$$($(MAKE) -s -f test_cache_consistency.mk VER=3.0.2 MINIZ_SHA256= $b/miniz-3.0.2/miniz.h 2>&1 >/dev/null | sed -n 's/.*MINIZ_SHA256 := //p'); \
 	  test -n "$$H" || (echo "ERROR: discovery printed no hash" && exit 1); \
 	  $(MAKE) -s -f test_cache_consistency.mk VER=3.0.2 MINIZ_SHA256=$$H $b/miniz-3.0.2/miniz.h
-	@N=$$(ls $(GRAFT_CACHE) | grep -cE '^[0-9a-f]{12}_[0-9a-f]{12}$$'); \
-	  test "$$N" = 3 || (echo "ERROR: pinning a SHA did not re-key (entries $$N)" && exit 1)
-	@echo "  change SHA (no clean): distinct entry, re-verified: OK"
+	@test -f $b/miniz-3.0.2/miniz.h || (echo "ERROR: pinned build did not produce the target" && exit 1)
+	@N=$$(ls $(GRAFT_CACHE)/hash_files | grep -cE '^[0-9a-f]{64}$$'); \
+	  test "$$N" = 2 || (echo "ERROR: pinning the discovered hash changed the cache (entries $$N, expected 2)" && exit 1)
+	@echo "  pin discovered hash (no clean): free, no new entry: OK"
 	@echo "Cache consistency (no make clean) test: OK"

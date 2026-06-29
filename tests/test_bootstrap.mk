@@ -13,7 +13,7 @@ GRAFT_SRC := $b/graft-src
 # Build the throwaway graft "remote" with a tag to clone by.
 $(GRAFT_SRC)/.git/HEAD:
 	@rm -rf $(GRAFT_SRC) && mkdir -p $(GRAFT_SRC)
-	@cp ../graft.mk ../pidwatch.c $(GRAFT_SRC)/
+	@cp ../graft.mk ../graft.sh ../pidwatch.c $(GRAFT_SRC)/
 	@git -C $(GRAFT_SRC) init -q
 	@git -C $(GRAFT_SRC) add -A
 	@git -C $(GRAFT_SRC) -c user.email=t@t.test -c user.name=test commit -qm graft

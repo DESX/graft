@@ -18,12 +18,14 @@ $(foreach V,$(sort $(DIRS)),$(eval $(call GRAFT_MK_DIR,$V)))
 test:
 	@# First build - creates cache
 	@$(MAKE) -f test_caching.mk $(MINIZ_TGT)
-	@test -f $(MINIZ_TAR) || (echo "ERROR: cache not created" && exit 1)
-	@# Record cache timestamp
-	@CACHE_TIME=$$(stat -c %Y $(MINIZ_TAR)) && \
+	@test -f $(MINIZ_KEY) || (echo "ERROR: keyfile not created" && exit 1)
+	@# The content file is named by its hash; its mtime must not change on a rebuild
+	@# (a re-download would replace it).
+	@CF=$(GRAFT_CACHE)/hash_files/$$(head -1 $(MINIZ_KEY)) && \
+	 CACHE_TIME=$$(stat -c %Y $$CF) && \
 	 sleep 1 && \
 	 rm -rf $(MINIZ_DIR) && \
 	 $(MAKE) -f test_caching.mk $(MINIZ_TGT) && \
-	 NEW_TIME=$$(stat -c %Y $(MINIZ_TAR)) && \
+	 NEW_TIME=$$(stat -c %Y $$CF) && \
 	 test "$$CACHE_TIME" = "$$NEW_TIME" || (echo "ERROR: cache was re-downloaded" && exit 1)
 	@echo "Caching test: OK"

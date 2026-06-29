@@ -23,12 +23,14 @@ test: $(MINIZ_TGT)
 	@# TGT was made absolute within DIR.
 	@test "$(MINIZ_TGT)" = "$b/miniz-3.0.2/miniz.h" || (echo "ERROR: TGT not resolved within DIR: '$(MINIZ_TGT)'" && exit 1)
 	@test -f $b/miniz-3.0.2/miniz.h || (echo "ERROR: miniz.h not found" && exit 1)
-	@# TAR defaulted to an opaque content-addressed handle: $(GRAFT_CACHE)/<keyhash>,
-	@# a symlink pointing at a <keyhash>_<filehash> file (both 12 hex).
-	@test -L $(MINIZ_TAR) || (echo "ERROR: TAR is not a cache handle symlink: '$(MINIZ_TAR)'" && exit 1)
-	@test -f $(MINIZ_TAR) || (echo "ERROR: cache handle does not resolve to a file" && exit 1)
-	@readlink $(MINIZ_TAR) | grep -qE '^[0-9a-f]{12}_[0-9a-f]{12}$$' \
-	  || (echo "ERROR: cache file not content-addressed: '$$(readlink $(MINIZ_TAR))'" && exit 1)
+	@# KEY defaulted to the keyfile $(GRAFT_CACHE)/key_files/<12-hex keyhash>.
+	@echo "$(MINIZ_KEY)" | grep -qE '^$(GRAFT_CACHE)/key_files/[0-9a-f]{12}$$' \
+	  || (echo "ERROR: KEY default wrong: '$(MINIZ_KEY)'" && exit 1)
+	@test -f $(MINIZ_KEY) || (echo "ERROR: keyfile not created" && exit 1)
+	@# Its first line is the full sha256 of the content, stored in hash_files/.
+	@fh=$$(head -1 $(MINIZ_KEY)); \
+	  echo "$$fh" | grep -qE '^[0-9a-f]{64}$$' || (echo "ERROR: keyfile line 1 not a sha256: '$$fh'" && exit 1); \
+	  test -f $(GRAFT_CACHE)/hash_files/$$fh || (echo "ERROR: content file missing" && exit 1)
 	@# TMP defaulted to $b/graft-tmp/<name> (per-project scratch, removed by clean).
 	@test "$(MINIZ_TMP)" = "$b/graft-tmp/miniz" || (echo "ERROR: TMP default wrong: '$(MINIZ_TMP)'" && exit 1)
-	@echo "Defaults (versioned DIR, TAR, TMP; relative TGT) test: OK"
+	@echo "Defaults (versioned DIR, keyfile, TMP; relative TGT) test: OK"

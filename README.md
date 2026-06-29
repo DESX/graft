@@ -19,9 +19,12 @@ process supervisor.
 - [Creating directories](#creating-directories): emit `mkdir -p` rules in bulk (`GRAFT_MK_DIR`).
 - [Generated targets](#generated-targets): the phony targets each call adds (`name_tgt`, `name_patch`, `name_stop`).
 
-Graft is just Make code; its macros shell out to ordinary tools, and it targets
-Linux with the GNU coreutils/findutils userland (it relies on GNU behaviors of
-`find`, `tar`, and `ln`). The core (fetching, caching, patching, overlaying) needs
+Graft is `graft.mk` plus a small helper script `graft.sh` that sits beside it (and
+`pidwatch.c` for the supervisor); you `include` the one Makefile and the rest is
+found automatically. Its macros own the Make dependency graph and shell out to
+`graft.sh` for the imperative cache work. It targets Linux with the GNU
+coreutils/findutils userland (it relies on GNU behaviors of `find`, `tar`, and
+`ln`). The core (fetching, caching, patching, overlaying) needs
 `make`, `curl`, `git`, and `tar` with gzip. A few tools are each needed only by one
 feature: `unzip` for zip sources, `patch` for the patch workflow, `sha256sum` for
 the optional download integrity check, and a C compiler for the process supervisor,
@@ -165,37 +168,58 @@ graft: JQ_SHA256 is empty — pin it by adding:
     JQ_SHA256 := 5942c9b0934e510ee61eb3e30273f1b3fe2590df93933a93d7c58b81d19c8ff5
 ```
 
-Copy that line over the empty one and rebuild. Discovery has its own cache key, so
-it prints the hash even if the dependency is already cached — no `make clean`
-needed. (For git, the verified bytes are graft's reproducible archive of the
-checkout; pinning a hash there is most useful for plain-source deps, since a
-`PRE_UNPACK` build step makes the archive non-deterministic — the commit already
-pins those.)
+Copy that line over the empty one and rebuild. Pinning the discovered hash is
+**free**: the content is already stored under that hash, so nothing re-downloads and
+nothing moves. Discovery works even when the dependency is already cached — no
+`make clean` needed.
 
-`NAME_SHA256` is also part of the cache key, so changing it re-fetches and
-re-verifies rather than trusting a previously cached file.
+The pin is checked against the *current* source, which is what makes it safe. If you
+**bump the version or URL but forget to update the hash**, graft does not silently
+build the old content — it re-fetches the new source, sees it no longer matches, and
+stops with the correct hash to paste:
+
+```
+graft: JQ source no longer matches the pinned hash.
+  JQ_SHA256 := <old hash>
+  actual    := <new hash>
+Update JQ_SHA256 to the actual hash above.
+```
+
+A wrong hash fails the same way. (For git, the verified bytes are graft's archive of
+the checkout, which is made byte-reproducible — so pinning a plain-source dep is a
+clean integrity pin. Pinning a dep with a `PRE_UNPACK` build step instead asserts the
+*build* is reproducible; see [Build hooks](#build-hooks-pre_unpack--post_unpack).)
 
 ## Versioned caching
 
-The caching is the important part. The install dir embeds a human-readable version
-token (`$b/<name>-<version>`), and the **cache** is content-addressed: each file is
-stored as `<keyhash>_<filehash>`, where `keyhash` is a 12-hex hash of the pinned
-commit/version **plus the source URL**, and `filehash` is a 12-hex hash of the
-downloaded bytes. A stable `<keyhash>` symlink is the handle graft builds against.
+The caching is the important part, and it is fully content-addressed. Under
+`GRAFT_CACHE`:
 
-Two consequences:
+- `hash_files/<sha256>` holds each downloaded file, named by its own full sha256 —
+  so identical content is stored once, however many deps point at it.
+- `key_files/<keyhash>` is a small text record per source: a 12-hex hash of the
+  commit/version **plus the URL**, whose first line is the sha256 of that source's
+  content (the rest is metadata for inspection). The build resolves through it — in
+  effect a pointer from "what to download" to "the bytes".
+- `<NAME>_<file>` symlinks in the cache root give the content human-readable names
+  for manual inspection; the build never reads them. Set `NAME_TAR` (or `NAME_FILE`
+  for a single file) to choose this symlink's name — it affects nothing else; the
+  `hash_files/` and `key_files/` entries are always pure hashes.
 
-- **Bumping the version is the whole operation.** Change `NAME_COMMIT` (or the URL)
-  and the keyhash and the install dir both change, so graft re-downloads into a
-  fresh dir, re-extracts cleanly, and rebuilds anything that depends on
-  `NAME_DIR`/`NAME_TGT`. Leave it alone and nothing re-downloads. Switch back and
-  graft reuses what it already has. No stale files, no manual cache busting.
-- **The key folds in the URL,** so the same tag or commit pinned across two
-  different repos never collides in the cache, and changing only the URL re-fetches.
+What this buys you:
 
-Cache files are opaque — they are storage, not meant to be read by name. You
-normally let `NAME_TAR`/`NAME_FILE` (the cache handle) and `NAME_DIR` default; graft
-manages the cache names entirely.
+- **Bumping the version is the whole operation.** Change `NAME_COMMIT` (or a URL) and
+  the keyhash and the install dir both change, so graft re-downloads into a fresh dir,
+  re-extracts cleanly, and rebuilds anything depending on `NAME_DIR`/`NAME_TGT`. Leave
+  it alone and nothing re-downloads; switch back and graft reuses what it has.
+- **No collisions.** The key folds in the URL, so the same tag/commit across two repos
+  never clash, and changing only the URL re-fetches.
+- **The build command counts too.** `PRE_UNPACK` is part of the key, so changing *how*
+  a dep is built re-fetches it — you never get a stale build from an old command.
+- **Adding a hash is free** — the content is already named by its hash, so pinning
+  never re-downloads (see [Pinning a hash](#pinning-a-hash)).
+
+You let graft manage the cache; only `NAME_DIR` is yours to override.
 
 ## Build hooks (PRE_UNPACK / POST_UNPACK)
 
@@ -217,6 +241,14 @@ $(eval $(call GRAFT_FETCH,FMT))
 
 The [`examples/cpp`](examples/cpp) Makefile uses this pattern to fetch and build
 fmt, Catch2, yaml-cpp, and SQLiteCpp with CMake.
+
+`PRE_UNPACK` is part of the cache key, so the built artifact is cached and a clean
+rebuild reuses it (the build, which may need the network, runs once) — and changing
+the build command re-fetches. You *can* pin `NAME_SHA256` on a built dep: it then
+asserts the build is **reproducible**, failing on another machine with a clear
+"built output differs" message if it isn't (or just working, if that machine pulls
+the artifact from a shared cache). If your build isn't deterministic, leave it
+unpinned.
 
 ## Ordering dependencies
 

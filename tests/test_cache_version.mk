@@ -37,6 +37,6 @@ test: | $b
 	@# ── Both versioned dirs AND cache entries coexist (switching back reuses them) ──
 	@test -d $b/miniz-2.1.0 && test -d $b/miniz-3.0.2 || (echo "ERROR: version dirs do not coexist" && exit 1)
 	@# Two distinct content-addressed cache files (one per version key).
-	@N=$$(ls $(GRAFT_CACHE) | grep -cE '^[0-9a-f]{12}_[0-9a-f]{12}$$'); \
+	@N=$$(ls $(GRAFT_CACHE)/hash_files | grep -cE '^[0-9a-f]{64}$$'); \
 	  test "$$N" -ge 2 || (echo "ERROR: cache entries do not coexist (have $$N)" && exit 1)
 	@echo "Versioned dir + cache test: OK"

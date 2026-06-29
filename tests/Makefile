@@ -7,7 +7,7 @@ SHELL := /bin/bash
 # "unknown" when git or history is unavailable.
 GRAFT_VERSION := $(shell git -C .. describe --tags --always --dirty 2>/dev/null || echo unknown)
 
-TESTS := test_tar_download test_zip_download test_git_clone test_git_ref test_patch test_patch_generate test_patch_robust test_overlay test_hooks test_caching test_dependencies test_pidwatch test_bootstrap test_bootstrap_version test_defaults test_cache_version test_cache_relocatable test_cache_key test_cache_consistency test_sha256 test_sha_discovery test_fetch_file
+TESTS := test_tar_download test_zip_download test_git_clone test_git_ref test_patch test_patch_generate test_patch_robust test_overlay test_hooks test_build_key test_caching test_dependencies test_pidwatch test_bootstrap test_bootstrap_version test_defaults test_cache_version test_cache_relocatable test_cache_key test_cache_consistency test_cache_symlink test_sha256 test_sha_discovery test_fetch_file
 
 .PHONY: all clean $(TESTS)
 

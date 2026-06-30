@@ -19,7 +19,12 @@ MAKEFLAGS := -j 8
 
 all: $b/test
 
-include ../../graft.mk
+# Bootstrap graft on first build (clone the pinned tag), then include it — nothing
+# is vendored. Override to test against a local checkout: make GRAFT_URL=../.. GRAFT_VER=main
+GRAFT_URL ?= https://github.com/DESX/graft.git
+GRAFT_VER ?= v1.9.0
+$(GRAFT_CACHE)/graft-$(GRAFT_VER)/graft.mk:; @git clone -q --depth=1 -b $(GRAFT_VER) $(GRAFT_URL) $(dir $@)
+include $(GRAFT_CACHE)/graft-$(GRAFT_VER)/graft.mk
 
 #-------------------------------------------------------------------------------
 # CMAKE (latest sometimes required by other libs)

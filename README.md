@@ -49,7 +49,7 @@ clones graft when the include is missing, then `include` it. On a fresh checkout
 is no separate setup step:
 
 ```makefile
-GRAFT_VER ?= v1.8.0
+GRAFT_VER ?= v1.9.0
 .cache/graft-$(GRAFT_VER)/graft.mk:; @git clone -q --depth=1 -b $(GRAFT_VER) https://github.com/DESX/graft.git $(dir $@)
 include .cache/graft-$(GRAFT_VER)/graft.mk
 ```
@@ -90,8 +90,8 @@ then add the install dir and cache dir to `DIRS`. `NAME_TGT` is an existence pro
 given **relative to the install dir** — any file that exists once extraction
 succeeds; graft makes it absolute, and your build rules depend on it.
 
-`NAME_DIR` (install dir, defaults to `$b/<name>-<version>`), `NAME_TAR` (cache
-path), and `NAME_TMP` (clone scratch) all default, so a dependency needs only its
+`NAME_DIR` (install dir, defaults to `$b/<name>-<version>`) and `NAME_TMP` (clone
+scratch) default, and the cache is fully managed, so a dependency needs only its
 probe target and source. Both `NAME_DIR` and the resolved `NAME_TGT` are set by the
 call, so you can reference them afterward. **Bumping the version is all it takes:**
 because the install dir and cache file both carry the version, changing

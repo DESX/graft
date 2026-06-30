@@ -23,7 +23,7 @@ GRAFT_CACHE ?= .cache
 .DEFAULT_GOAL := all
 
 GRAFT_URL ?= https://github.com/DESX/graft.git
-GRAFT_VER ?= v1.8.0
+GRAFT_VER ?= v1.9.0
 $(GRAFT_CACHE)/graft-$(GRAFT_VER)/graft.mk:; @git clone -q --depth=1 -b $(GRAFT_VER) $(GRAFT_URL) $(dir $@)
 include $(GRAFT_CACHE)/graft-$(GRAFT_VER)/graft.mk
 

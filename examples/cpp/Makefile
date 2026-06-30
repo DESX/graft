@@ -6,6 +6,10 @@
 # - Compiled: fmt, Catch2, yaml-cpp, SQLiteCpp
 # - Tool: CMake (downloaded, used to build other libraries)
 #
+# System requirements (beyond graft's own): a C++17 compiler and the OpenSSL dev
+# headers — cpp-httplib is built with SSL (-DCPPHTTPLIB_OPENSSL_SUPPORT, -lssl
+# -lcrypto). On Debian/Ubuntu: sudo apt install g++ libssl-dev.
+#
 # Each dependency sets only its existence probe (NAME_TGT, relative to the install
 # dir) and its source. DIR (defaults to $b/<name>-<version>), TAR, and the git
 # clone scratch dir are filled in by graft, so there is no per-dependency
